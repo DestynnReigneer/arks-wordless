@@ -1,0 +1,10 @@
+node_modules/
+data/*.db
+data/*.db-journal
+.env
+
+# Test + runtime artefacts
+data/
+boot.log
+*.log
+.DS_Store

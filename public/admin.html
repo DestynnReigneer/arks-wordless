@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wordless Admin</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { align-items: stretch; }
+  main { width: 100%; max-width: 700px; margin: 0 auto; padding: 20px 16px 60px; }
+  .admin-header { text-align: center; padding: 20px 0; }
+  .admin-header h1 { margin: 0; font-size: 22px; }
+  .admin-section {
+    background: #171922;
+    border: 1px solid #2a2d38;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .admin-section h2 { margin: 0 0 12px; font-size: 15px; }
+  .req-card {
+    border: 1px solid var(--tile-border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .req-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .req-topic { font-weight: 700; font-size: 15px; }
+  .req-meta { font-size: 11px; opacity: 0.5; }
+  .req-note { font-size: 12px; opacity: 0.75; margin-top: 4px; }
+  .req-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .req-actions button {
+    background: var(--key-bg);
+    border: 1px solid var(--tile-border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .req-actions button:hover { background: var(--key-hover); }
+  .req-fulfill-box { display: none; margin-top: 10px; }
+  .req-fulfill-box.open { display: block; }
+  .req-fulfill-box textarea {
+    width: 100%;
+    background: var(--key-bg);
+    color: var(--text);
+    border: 1px solid var(--tile-border);
+    border-radius: 6px;
+    padding: 8px;
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  .theme-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--tile-border);
+    font-size: 13px;
+  }
+  .theme-row:last-child { border-bottom: none; }
+  .empty-note { opacity: 0.5; font-size: 13px; text-align: center; padding: 12px; }
+  #lockScreen input {
+    width: 100%;
+    background: var(--key-bg);
+    color: var(--text);
+    border: 1px solid var(--tile-border);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .status-msg { font-size: 12px; min-height: 16px; margin-top: 8px; }
+  .status-msg.error { color: #f87171; }
+  .status-msg.ok { color: var(--correct); }
+</style>
+</head>
+<body>
+<main>
+  <div class="admin-header">
+    <h1>🛠️ Wordless Admin</h1>
+    <div style="opacity:0.5; font-size:12px;">Theme requests · theme management</div>
+  </div>
+
+  <div id="lockScreen" class="admin-section">
+    <h2>Enter admin token</h2>
+    <input type="password" id="tokenInput" placeholder="Admin token" autocomplete="off">
+    <button id="unlockBtn" class="primary-btn" style="border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer;">Unlock</button>
+    <div id="lockError" class="status-msg error"></div>
+  </div>
+
+  <div id="adminContent" class="hidden">
+    <div class="admin-section">
+      <h2>💬 Pending Theme Requests</h2>
+      <div id="requestsList"></div>
+    </div>
+
+    <div class="admin-section">
+      <h2>✨ Create Theme From JSON</h2>
+      <p style="font-size:12px; opacity:0.7; margin-top:0;">Paste the JSON a chatbot (or you, by hand) generated for a topic.</p>
+      <textarea id="jsonInput" rows="6" placeholder='{"label":"Bluey","subject":"Bluey character","emoji":"🐶","accent":"#4fb8e8","bg":"#0d1a22","fontKey":"comic","words":["bluey","bingo","muffin","chilli","bandit","socks"]}'></textarea>
+      <button id="createFromJsonBtn" class="primary-btn" style="border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer;margin-top:8px;">Create Theme</button>
+      <div id="jsonStatus" class="status-msg"></div>
+    </div>
+
+    <div class="admin-section">
+      <h2>🎨 All Themes</h2>
+      <div id="themesList"></div>
+    </div>
+
+    <button id="lockBtn" class="small-btn" style="margin-top:10px;">🔒 Lock admin panel</button>
+  </div>
+</main>
+<script src="admin.js"></script>
+</body>
+</html>

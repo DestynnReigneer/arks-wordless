@@ -1,0 +1,149 @@
+# Adult dictionary supplement — words ADDED on top of ENABLE1.
+#
+# ENABLE1 is a Scrabble tournament list, so it already contains most
+# profanity (fuck, shit, cunt, twat, blowjob and friends all score by
+# default). What it misses is slang, British/Aussie vernacular, and
+# anything coined after about 2000 — so those are listed here.
+#
+# Inflections are written out explicitly rather than generated, so this
+# file is exactly what becomes scoreable. Nothing here is guessed at.
+# Add your own freely; one word per line, 3+ letters, A-Z only.
+#
+# Not included: slurs aimed at race, sexuality, or disability. Not a
+# judgement on your party — they just make for a bad scoring surprise
+# when they turn up on the end-of-round reveal screen. Add them yourself
+# if you disagree.
+
+# --- gaps in ENABLE1: profanity & anatomy ---
+arsehole
+arseholes
+ballsack
+ballsacks
+bellend
+bellends
+bollocking
+clit
+clits
+dumbass
+dumbasses
+handjob
+handjobs
+jizz
+jizzed
+jizzing
+minge
+minges
+nads
+poo
+pooed
+pooing
+poos
+pube
+punani
+queef
+queefed
+queefing
+queefs
+rimjob
+rimjobs
+schlong
+schlongs
+shite
+shited
+shites
+shitting
+skanky
+stiffy
+stiffies
+todger
+todgers
+wang
+wangs
+wank
+wanked
+wanker
+wankers
+wanking
+wanks
+
+# --- gaps: insults ---
+knobhead
+knobheads
+munter
+munters
+naff
+numpty
+perv
+perved
+pervs
+plonker
+plonkers
+scrote
+scrotes
+tosspot
+tosspots
+wazzock
+wazzocks
+
+# --- drinking ---
+boozed
+boozer
+boozers
+boozing
+chugged
+chugging
+chundered
+chundering
+chunders
+chuggable
+necked
+necking
+pissup
+pissups
+prosecco
+sesh
+seshes
+shandy
+shitfaced
+shots
+slammer
+slammers
+tequila
+tinnie
+tinnies
+vodkas
+wasted
+wazzed
+
+# --- modern slang ---
+bae
+bruh
+cringe
+cringey
+ghosted
+ghosting
+janky
+lit
+meme
+memed
+memes
+rizz
+salty
+simped
+simping
+simps
+sus
+swole
+thicc
+thirsty
+thot
+thots
+vibe
+vibed
+vibes
+vibing
+yeet
+yeeted
+yeeting
+yeets
+yolo

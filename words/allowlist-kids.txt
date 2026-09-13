@@ -1,0 +1,28 @@
+# Kids dictionary allowlist — never blocked, whatever the blocklist says.
+#
+# Expanding blocklist base words into inflections inevitably catches
+# innocent bystanders: "heroin" generates HEROINES, "bonk" generates
+# BONKERS, "spunk" generates SPUNKY. This file wins over the blocklist,
+# so those come back.
+#
+# Exact words only — no inflection expansion happens here. If you spot a
+# real word your kid found and the game wrongly rejected, add it below.
+
+heroines
+bonkers
+spunky
+cocky
+cocked
+cocker
+cockers
+dicker
+dickered
+dickering
+dickers
+dicky
+pricked
+pricking
+pricker
+prickers
+bastardy
+genitally

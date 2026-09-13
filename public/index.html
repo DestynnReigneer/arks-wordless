@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wordless Arcade</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --text: #e8ecf4;
+    --muted: #8b93a3;
+    --card: #181b22;
+    --card-hover: #1f232c;
+    --border: #262a33;
+    --accent: #7dd3fc;
+    --accent-2: #facc15;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 16px 60px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 34px;
+    letter-spacing: 3px;
+    font-weight: 700;
+    text-align: center;
+  }
+  h1 .lit { color: var(--accent); }
+  .tagline {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-align: center;
+  }
+  .games {
+    margin-top: 36px;
+    width: 100%;
+    max-width: 680px;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+  .game {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 20px 20px;
+    transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  }
+  .game:hover, .game:focus-visible {
+    background: var(--card-hover);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    outline: none;
+  }
+  .game .emoji { font-size: 34px; line-height: 1; }
+  .game h2 {
+    margin: 12px 0 6px;
+    font-size: 19px;
+    letter-spacing: 1px;
+  }
+  .game.shaker h2 { color: var(--accent-2); }
+  .game.wordless h2 { color: var(--accent); }
+  .game p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+  .game .meta {
+    margin-top: 14px;
+    font-size: 11px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #5f6675;
+  }
+  footer {
+    margin-top: 44px;
+    font-size: 12px;
+    color: #4d5461;
+    text-align: center;
+    line-height: 1.7;
+  }
+  footer a { color: #6b7383; }
+</style>
+</head>
+<body>
+
+<h1>WORD<span class="lit">LESS</span> ARCADE</h1>
+<div class="tagline">Self-hosted. No accounts, no ads, no internet required.</div>
+
+<div class="games">
+  <a class="game wordless" href="wordless.html">
+    <div class="emoji">🔤</div>
+    <h2>Wordless</h2>
+    <p>Guess the themed word in six tries. Pick a theme, use your hints wisely, and get your initials on the board.</p>
+    <div class="meta">1 player · Themed · Hints</div>
+  </a>
+
+  <a class="game shaker" href="shaker.html">
+    <div class="emoji">🎲</div>
+    <h2>Word Shaker</h2>
+    <p>Shake the dice and find every word you can before the timer runs out. Solo, around one phone, or everyone on their own.</p>
+    <div class="meta">1–8 players · Timed · Two dictionaries</div>
+  </a>
+</div>
+
+<footer>
+  Running on your own hardware.<br>
+  <a href="admin.html">Admin</a>
+</footer>
+
+</body>
+</html>
