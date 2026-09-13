@@ -7,12 +7,12 @@
 const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 
-const dice = require(path.join(ROOT, 'shaker/dice.js'));
-const solver = require(path.join(ROOT, 'shaker/solver.js'));
-const scoring = require(path.join(ROOT, 'shaker/scoring.js'));
-const dictionary = require(path.join(ROOT, 'shaker/dictionary.js'));
-const progress = require(path.join(ROOT, 'shaker/progress.js'));
-const marathon = require(path.join(ROOT, 'shaker/marathon.js'));
+const dice = require(path.join(ROOT, 'rambler/dice.js'));
+const solver = require(path.join(ROOT, 'rambler/solver.js'));
+const scoring = require(path.join(ROOT, 'rambler/scoring.js'));
+const dictionary = require(path.join(ROOT, 'rambler/dictionary.js'));
+const progress = require(path.join(ROOT, 'rambler/progress.js'));
+const marathon = require(path.join(ROOT, 'rambler/marathon.js'));
 
 async function run() {
   let pass = 0;

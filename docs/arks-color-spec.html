@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARKS Design Language Color Spec</title>
+</head>
+<body>
+<style>
+:root{--font:"Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font);background:#13151a;color:#e9ecf2;padding:36px 26px 70px}
+.wrap{max-width:1060px;margin:0 auto}
+h1{font-size:24px;letter-spacing:.04em;margin:0 0 8px}
+.lede{font-size:12.5px;color:#98a1b0;line-height:1.68;margin-bottom:10px;max-width:74ch}
+.lede b{color:#cfd6e0}
+.hint{font-size:11.5px;color:#7c8593;margin-bottom:8px}
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px}
+.legend span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;border-radius:20px;
+  padding:4px 11px;border:1px solid rgba(255,255,255,.18);color:#9aa3b2}
+.legend span.house{border-color:#c9a24a;color:#e7c987}
+.lang{border:1px solid rgba(255,255,255,.13);border-radius:18px;padding:20px 22px 20px;margin-bottom:18px;
+  background:linear-gradient(160deg,var(--bgm,#20242c),var(--pl,#1a1d24));
+  box-shadow:0 10px 30px rgba(0,0,0,.28)}
+.lang.series{background:#1a1e26}
+.lang.ivory{border-color:rgba(0,0,0,.18)}
+.head{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap;margin-bottom:9px}
+.head h2{margin:0;font-size:19px;letter-spacing:.03em;color:var(--tx,#fff)}
+.tag{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;border-radius:20px;padding:3px 10px;
+  border:1px solid currentColor;color:var(--ft,#8b94a3);opacity:.9}
+.tag.house{color:var(--ac,#c9a24a);opacity:1}
+.sub{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ft,#8b94a3)}
+.use{font-size:12.5px;color:var(--tx,#e8ecf3);line-height:1.6;margin:0 0 5px;max-width:76ch;opacity:.95}
+.use b{opacity:.7;font-weight:600}
+.note{font-size:12px;color:var(--dm,#aab3c1);line-height:1.65;margin:0 0 16px;max-width:76ch}
+.strip{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:8px}
+.strip.small{grid-template-columns:repeat(5,1fr)}
+.sw{border:1px solid rgba(128,128,128,.42);border-radius:11px;height:74px;cursor:pointer;
+  display:flex;flex-direction:column;justify-content:flex-end;padding:8px 9px;gap:2px;
+  font-family:var(--font);text-align:left;transition:.15s}
+.sw:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.42)}
+.sw span{font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+  color:rgba(0,0,0,.6);text-shadow:0 1px 0 rgba(255,255,255,.3)}
+.sw b{font-size:10.5px;font-variant-numeric:tabular-nums;
+  color:rgba(0,0,0,.84);text-shadow:0 1px 0 rgba(255,255,255,.3)}
+.sw.dark span{color:rgba(255,255,255,.74);text-shadow:0 1px 2px rgba(0,0,0,.55)}
+.sw.dark b{color:rgba(255,255,255,.96);text-shadow:0 1px 2px rgba(0,0,0,.55)}
+.grad{height:54px;border-radius:11px;border:1px solid rgba(128,128,128,.4);
+  display:flex;align-items:flex-end;padding:8px 10px;margin-top:4px}
+.grad code{font-size:10px;color:rgba(255,255,255,.92);text-shadow:0 1px 3px rgba(0,0,0,.65)}
+.lang.ivory .grad code{color:rgba(0,0,0,.72);text-shadow:0 1px 0 rgba(255,255,255,.4)}
+.meta{font-size:10.5px;color:var(--ft,#8b94a3);margin-top:11px;letter-spacing:.02em}
+.meta b{color:var(--dm,#c3cbd6)}
+.rules{border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:18px 22px 20px;background:#1a1e26}
+.rules h2{margin:0 0 10px;font-size:15px;letter-spacing:.03em}
+.rules ul{margin:0;padding-left:19px;font-size:12.5px;line-height:1.85;color:#aeb6c3}
+@media (max-width:820px){.strip,.strip.small{grid-template-columns:repeat(3,1fr)}}
+@media print{
+  body{background:#fff;color:#111;padding:0}
+  .hint,#toast{display:none}
+  .lang{break-inside:avoid;box-shadow:none}
+  .sw:hover{transform:none}
+}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:#2a2f3a;border:1px solid rgba(255,255,255,.2);border-radius:24px;padding:9px 18px;
+  font-size:12px;opacity:0;transition:.2s;pointer-events:none}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+<div class="wrap">
+<h1>Design Language Color Spec</h1>
+<div class="lede">Six palettes. Four are <b>house languages</b> offered on every build; two are
+<b>working variants</b> for accessibility, client choice, and off-label fun. Every swatch is a
+<b>flattened solid hex</b> — translucent tokens have already been composited over their own background,
+so these paste straight into another project, Figma, or Power Apps without recreating the layering.</div>
+<div class="hint">Click any swatch to copy its hex. Print or save as PDF to share.</div>
+<div class="legend"><span class="house">House language</span><span>Working variant</span></div>
+
+<section class="lang summit" style="--pl:#5d2f8e;--bgm:#63359b;--tx:#f4ecff;--dm:#c9b3e6;--ft:#9d84bd;--ac:#f26fae">
+  <div class="head"><h2>Summit</h2><span class="tag house">House language</span><span class="sub">purple gradient</span></div>
+  <p class="use"><b>Use for:</b> Internal tools, morale-facing features, anything with a gamification layer.</p>
+  <p class="note">The signature look. Sits between light and dark mode — easy on the eyes across a long shift.</p>
+  <div class="strip"><button class="sw" data-c="#4b1f74" style="background:#4b1f74"><span>grad start</span><b>#4B1F74</b></button><button class="sw" data-c="#63359b" style="background:#63359b"><span>background</span><b>#63359B</b></button><button class="sw" data-c="#7a44ab" style="background:#7a44ab"><span>grad end</span><b>#7A44AB</b></button><button class="sw" data-c="#5d2f8e" style="background:#5d2f8e"><span>panel</span><b>#5D2F8E</b></button><button class="sw" data-c="#743fa6" style="background:#743fa6"><span>top bar</span><b>#743FA6</b></button><button class="sw" data-c="#2f174b" style="background:#2f174b"><span>chart plate</span><b>#2F174B</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#f4ecff" style="background:#f4ecff"><span>text</span><b>#F4ECFF</b></button><button class="sw" data-c="#c9b3e6" style="background:#c9b3e6"><span>secondary</span><b>#C9B3E6</b></button><button class="sw" data-c="#9d84bd" style="background:#9d84bd"><span>caption</span><b>#9D84BD</b></button><button class="sw" data-c="#f26fae" style="background:#f26fae"><span>accent</span><b>#F26FAE</b></button><button class="sw" data-c="#b07ef0" style="background:#b07ef0"><span>accent 2</span><b>#B07EF0</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#5fd68b" style="background:#5fd68b"><span>good</span><b>#5FD68B</b></button><button class="sw" data-c="#efb457" style="background:#efb457"><span>warn</span><b>#EFB457</b></button><button class="sw" data-c="#ff7a7a" style="background:#ff7a7a"><span>bad</span><b>#FF7A7A</b></button><button class="sw" data-c="#7fb8e8" style="background:#7fb8e8"><span>info</span><b>#7FB8E8</b></button></div>
+  <div class="grad" style="background:linear-gradient(160deg,#4b1f74 0%,#63359b 58%,#7a44ab 100%)"><code>linear-gradient(160deg, #4b1f74 0%, #63359b 58%, #7a44ab 100%)</code></div>
+  <div class="meta">body text on panel <b>8.1:1</b></div>
+</section>
+
+<section class="lang command" style="--pl:#0f2943;--bgm:#0d2740;--tx:#eaf2fb;--dm:#a9c2da;--ft:#7d96ae;--ac:#c8963c">
+  <div class="head"><h2>Command</h2><span class="tag house">House language</span><span class="sub">navy + gold · dark command room</span></div>
+  <p class="use"><b>Use for:</b> Leadership, a government client, or any external audience — or a dark room with a wall of monitors doing the talking.</p>
+  <p class="note">Restrained and official, built to hold up under multiple screens glowing in a dark room. The safe default when the room is formal. (Renamed from DHS — same colors, sharper framing.)</p>
+  <div class="strip"><button class="sw" data-c="#071827" style="background:#071827"><span>grad start</span><b>#071827</b></button><button class="sw" data-c="#0d2740" style="background:#0d2740"><span>background</span><b>#0D2740</b></button><button class="sw" data-c="#123252" style="background:#123252"><span>grad end</span><b>#123252</b></button><button class="sw" data-c="#0f2943" style="background:#0f2943"><span>panel</span><b>#0F2943</b></button><button class="sw" data-c="#0d2740" style="background:#0d2740"><span>top bar</span><b>#0D2740</b></button><button class="sw" data-c="#081828" style="background:#081828"><span>chart plate</span><b>#081828</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#eaf2fb" style="background:#eaf2fb"><span>text</span><b>#EAF2FB</b></button><button class="sw" data-c="#a9c2da" style="background:#a9c2da"><span>secondary</span><b>#A9C2DA</b></button><button class="sw" data-c="#7d96ae" style="background:#7d96ae"><span>caption</span><b>#7D96AE</b></button><button class="sw" data-c="#c8963c" style="background:#c8963c"><span>accent</span><b>#C8963C</b></button><button class="sw" data-c="#4a90d9" style="background:#4a90d9"><span>accent 2</span><b>#4A90D9</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#5fd68b" style="background:#5fd68b"><span>good</span><b>#5FD68B</b></button><button class="sw" data-c="#efb457" style="background:#efb457"><span>warn</span><b>#EFB457</b></button><button class="sw" data-c="#ff7a7a" style="background:#ff7a7a"><span>bad</span><b>#FF7A7A</b></button><button class="sw" data-c="#7fb8e8" style="background:#7fb8e8"><span>info</span><b>#7FB8E8</b></button></div>
+  <div class="grad" style="background:linear-gradient(160deg,#071827 0%,#0d2740 58%,#123252 100%)"><code>linear-gradient(160deg, #071827 0%, #0d2740 58%, #123252 100%)</code></div>
+  <div class="meta">body text on panel <b>13.1:1</b></div>
+</section>
+
+<section class="lang azure" style="--pl:#203f60;--bgm:#35608c;--tx:#ecf5fd;--dm:#c2d8ee;--ft:#aec8e2;--ac:#4ec8f0">
+  <div class="head"><h2>Azure</h2><span class="tag house">House language</span><span class="sub">luminous blue · the "Dim" slot</span></div>
+  <p class="use"><b>Use for:</b> When a client wants a dark theme that still feels bright.</p>
+  <p class="note">Brightest of the dark set. The ground glows and the panels recess into it.</p>
+  <div class="strip"><button class="sw" data-c="#2b537a" style="background:#2b537a"><span>grad start</span><b>#2B537A</b></button><button class="sw" data-c="#35608c" style="background:#35608c"><span>background</span><b>#35608C</b></button><button class="sw" data-c="#2f587f" style="background:#2f587f"><span>grad end</span><b>#2F587F</b></button><button class="sw" data-c="#203f60" style="background:#203f60"><span>panel</span><b>#203F60</b></button><button class="sw" data-c="#213e60" style="background:#213e60"><span>top bar</span><b>#213E60</b></button><button class="sw" data-c="#112235" style="background:#112235"><span>chart plate</span><b>#112235</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#ecf5fd" style="background:#ecf5fd"><span>text</span><b>#ECF5FD</b></button><button class="sw" data-c="#c2d8ee" style="background:#c2d8ee"><span>secondary</span><b>#C2D8EE</b></button><button class="sw" data-c="#aec8e2" style="background:#aec8e2"><span>caption</span><b>#AEC8E2</b></button><button class="sw" data-c="#4ec8f0" style="background:#4ec8f0"><span>accent</span><b>#4EC8F0</b></button><button class="sw" data-c="#8f9cf5" style="background:#8f9cf5"><span>accent 2</span><b>#8F9CF5</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#5fd68b" style="background:#5fd68b"><span>good</span><b>#5FD68B</b></button><button class="sw" data-c="#f0bc5e" style="background:#f0bc5e"><span>warn</span><b>#F0BC5E</b></button><button class="sw" data-c="#ff9a9a" style="background:#ff9a9a"><span>bad</span><b>#FF9A9A</b></button><button class="sw" data-c="#8fd0f5" style="background:#8fd0f5"><span>info</span><b>#8FD0F5</b></button></div>
+  <div class="grad" style="background:linear-gradient(160deg,#2b537a 0%,#35608c 58%,#2f587f 100%)"><code>linear-gradient(160deg, #2b537a 0%, #35608c 58%, #2f587f 100%)</code></div>
+  <div class="meta">body text on panel <b>9.8:1</b></div>
+</section>
+
+<section class="lang ivory" style="--pl:#e6ddc7;--bgm:#d2c7b0;--tx:#383222;--dm:#5b5344;--ft:#665d4a;--ac:#8c3346">
+  <div class="head"><h2>Ivory</h2><span class="tag house">House language</span><span class="sub">warm paper · the "Light" slot</span></div>
+  <p class="use"><b>Use for:</b> The light option — now a full house language alongside Summit, Command, and Azure.</p>
+  <p class="note">Heavy cotton legal bond, not white. Deliberately warm — a cool gray reads as white to most people even when its luminance is nowhere near it. Carries a faint fractal grain so the ground reads as stock rather than fill.</p>
+  <div class="strip"><button class="sw" data-c="#c9bda4" style="background:#c9bda4"><span>grad start</span><b>#C9BDA4</b></button><button class="sw" data-c="#d2c7b0" style="background:#d2c7b0"><span>background</span><b>#D2C7B0</b></button><button class="sw" data-c="#ccc0a8" style="background:#ccc0a8"><span>grad end</span><b>#CCC0A8</b></button><button class="sw" data-c="#e6ddc7" style="background:#e6ddc7"><span>panel</span><b>#E6DDC7</b></button><button class="sw" data-c="#e9e2d0" style="background:#e9e2d0"><span>top bar</span><b>#E9E2D0</b></button><button class="sw" data-c="#faf7ef" style="background:#faf7ef"><span>chart plate</span><b>#FAF7EF</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#383222" style="background:#383222"><span>text</span><b>#383222</b></button><button class="sw" data-c="#5b5344" style="background:#5b5344"><span>secondary</span><b>#5B5344</b></button><button class="sw" data-c="#665d4a" style="background:#665d4a"><span>caption</span><b>#665D4A</b></button><button class="sw" data-c="#8c3346" style="background:#8c3346"><span>accent</span><b>#8C3346</b></button><button class="sw" data-c="#6b4a86" style="background:#6b4a86"><span>accent 2</span><b>#6B4A86</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#14663c" style="background:#14663c"><span>good</span><b>#14663C</b></button><button class="sw" data-c="#7a4e08" style="background:#7a4e08"><span>warn</span><b>#7A4E08</b></button><button class="sw" data-c="#96291f" style="background:#96291f"><span>bad</span><b>#96291F</b></button><button class="sw" data-c="#1f5075" style="background:#1f5075"><span>info</span><b>#1F5075</b></button></div>
+  <div class="grad" style="background:linear-gradient(160deg,#c9bda4 0%,#d2c7b0 58%,#ccc0a8 100%)"><code>linear-gradient(160deg, #c9bda4 0%, #d2c7b0 58%, #ccc0a8 100%)</code></div>
+  <div class="meta">body text on panel <b>9.4:1</b></div>
+</section>
+
+<section class="lang vice" style="--pl:#22103f;--bgm:#170a2e;--tx:#f5eaff;--dm:#c9a8dd;--ft:#9483ae;--ac:#ff2ec4">
+  <div class="head"><h2>Vice</h2><span class="tag">Working variant</span><span class="sub">neon pink · electric turquoise · cyberpunk</span></div>
+  <p class="use"><b>Use for:</b> A high-energy theme — arcade/game-corner features, kid-facing fun mode, late-night "lights-off" vibe.</p>
+  <p class="note">Hotline Miami by way of a terminal readout: near-black violet ground, magenta as the loud accent, electric turquoise as its cooler counter-signal. Status colors are pushed neon too so they still read as "alive" against this ground without being mistaken for decoration.</p>
+  <p class="note">Committed after a round of live tuning — paired with Orbitron for headings in the working mockup.</p>
+  <div class="strip"><button class="sw" data-c="#100620" style="background:#100620"><span>grad start</span><b>#100620</b></button><button class="sw" data-c="#170a2e" style="background:#170a2e"><span>background</span><b>#170A2E</b></button><button class="sw" data-c="#2c1350" style="background:#2c1350"><span>grad end</span><b>#2C1350</b></button><button class="sw" data-c="#22103f" style="background:#22103f"><span>panel</span><b>#22103F</b></button><button class="sw" data-c="#1c0e38" style="background:#1c0e38"><span>top bar</span><b>#1C0E38</b></button><button class="sw" data-c="#0a0416" style="background:#0a0416"><span>chart plate</span><b>#0A0416</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#f5eaff" style="background:#f5eaff"><span>text</span><b>#F5EAFF</b></button><button class="sw" data-c="#c9a8dd" style="background:#c9a8dd"><span>secondary</span><b>#C9A8DD</b></button><button class="sw" data-c="#9483ae" style="background:#9483ae"><span>caption</span><b>#9483AE</b></button><button class="sw" data-c="#ff2ec4" style="background:#ff2ec4"><span>accent</span><b>#FF2EC4</b></button><button class="sw" data-c="#00ffc2" style="background:#00ffc2"><span>accent 2</span><b>#00FFC2</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#39ff8c" style="background:#39ff8c"><span>good</span><b>#39FF8C</b></button><button class="sw" data-c="#ffd23f" style="background:#ffd23f"><span>warn</span><b>#FFD23F</b></button><button class="sw" data-c="#ff3860" style="background:#ff3860"><span>bad</span><b>#FF3860</b></button><button class="sw" data-c="#3ec6ff" style="background:#3ec6ff"><span>info</span><b>#3EC6FF</b></button></div>
+  <div class="grad" style="background:linear-gradient(160deg,#100620 0%,#170a2e 58%,#2c1350 100%)"><code>linear-gradient(160deg, #100620 0%, #170a2e 58%, #2c1350 100%)</code></div>
+  <div class="meta">body text on panel <b>~14.9:1</b> (calculated same as the others — re-verify if you change the hexes)</div>
+</section>
+
+<section class="lang eightbit" style="--pl:#171623;--bgm:#12111c;--tx:#f4ecd0;--dm:#c9b98a;--ft:#8f8367;--ac:#ffc72c">
+  <div class="head"><h2>8-Bit</h2><span class="tag">Working variant</span><span class="sub">arcade cabinet · coin-op era</span></div>
+  <p class="use"><b>Use for:</b> A retro arcade/game-room mode — the kid request board as a "quest log," achievement pop-ups, anything that wants a coin-op wink.</p>
+  <p class="note">Dark cabinet black lit by marquee bulbs. Gold reads as the coin/power-up color, blue as the player-two signal — red is held back for status only, never decoration, so "game over" red always means something.</p>
+  <p class="note">New — a first pass, not tuned yet. Expect this one to get retuned like the others did before landing.</p>
+  <div class="strip"><button class="sw" data-c="#08080f" style="background:#08080f"><span>grad start</span><b>#08080F</b></button><button class="sw" data-c="#12111c" style="background:#12111c"><span>background</span><b>#12111C</b></button><button class="sw" data-c="#1e1a30" style="background:#1e1a30"><span>grad end</span><b>#1E1A30</b></button><button class="sw" data-c="#171623" style="background:#171623"><span>panel</span><b>#171623</b></button><button class="sw" data-c="#100f19" style="background:#100f19"><span>top bar</span><b>#100F19</b></button><button class="sw" data-c="#060509" style="background:#060509"><span>chart plate</span><b>#060509</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#f4ecd0" style="background:#f4ecd0"><span>text</span><b>#F4ECD0</b></button><button class="sw" data-c="#c9b98a" style="background:#c9b98a"><span>secondary</span><b>#C9B98A</b></button><button class="sw" data-c="#8f8367" style="background:#8f8367"><span>caption</span><b>#8F8367</b></button><button class="sw" data-c="#ffc72c" style="background:#ffc72c"><span>accent</span><b>#FFC72C</b></button><button class="sw" data-c="#2e9bff" style="background:#2e9bff"><span>accent 2</span><b>#2E9BFF</b></button></div>
+  <div class="strip small"><button class="sw" data-c="#3cd070" style="background:#3cd070"><span>good</span><b>#3CD070</b></button><button class="sw" data-c="#ffa400" style="background:#ffa400"><span>warn</span><b>#FFA400</b></button><button class="sw" data-c="#ff3b30" style="background:#ff3b30"><span>bad</span><b>#FF3B30</b></button><button class="sw" data-c="#4fc3f7" style="background:#4fc3f7"><span>info</span><b>#4FC3F7</b></button></div>
+  <div class="grad" style="background:linear-gradient(160deg,#08080f 0%,#12111c 58%,#1e1a30 100%)"><code>linear-gradient(160deg, #08080f 0%, #12111c 58%, #1e1a30 100%)</code></div>
+  <div class="meta">body text on panel <b>15.1:1</b></div>
+</section>
+
+<section class="lang series">
+  <div class="head"><h2>Chart Series</h2><span class="tag">Shared</span><span class="sub">identical in every language</span></div>
+  <p class="note">Validated once for color-vision deficiency: worst adjacent-pair &Delta;E 10.7 in OKLab against a target of 8, passing in both light and dark. <b>Never re-tint these per theme</b> — there is no way to tell by eye that you have broken it. Assign in fixed order, never cycled. Kept as-is across every language, including the newest ones.</p>
+  <div class="strip"><button class="sw" data-c="#5b93dc" style="background:#5b93dc"><span>Series 1</span><b>#5B93DC</b></button><button class="sw" data-c="#d96490" style="background:#d96490"><span>Series 2</span><b>#D96490</b></button><button class="sw" data-c="#ba852f" style="background:#ba852f"><span>Series 3</span><b>#BA852F</b></button><button class="sw" data-c="#2ea9a2" style="background:#2ea9a2"><span>Series 4</span><b>#2EA9A2</b></button></div>
+</section>
+
+<div class="rules"><h2>Rules that hold across every language</h2><ul>
+<li>Status colors are <b>reserved</b> — never a chart series, never decoration.</li>
+<li>Status is <b>never color alone</b> — always color + icon + word.</li>
+<li>Charts sit on the chart plate, never directly on a panel.</li>
+<li>Nothing is hard-coded. If a color appears twice, it is a token.</li>
+<li>A new language inherits these rules on day one, draft or not.</li>
+</ul></div>
+</div>
+<div id="toast"></div>
+<script>
+function lum(h){h=h.replace('#','');const f=c=>{c/=255;return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4)};
+ return 0.2126*f(parseInt(h.slice(0,2),16))+0.7152*f(parseInt(h.slice(2,4),16))+0.0722*f(parseInt(h.slice(4,6),16))}
+document.querySelectorAll('.sw').forEach(b=>{
+  if(lum(b.dataset.c) < 0.32) b.classList.add('dark');
+  b.onclick=()=>{ navigator.clipboard?.writeText(b.dataset.c.toUpperCase())
+    .then(()=>toast(b.dataset.c.toUpperCase()+' copied'), ()=>toast('Copy blocked — select the text instead')); };
+});
+let t; function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.add('on');
+  clearTimeout(t);t=setTimeout(()=>e.classList.remove('on'),1600)}
+</script>
+</body>
+</html>

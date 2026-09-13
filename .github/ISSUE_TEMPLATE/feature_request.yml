@@ -20,7 +20,7 @@ body:
     attributes:
       label: Where does it belong?
       options:
-        - Word Shaker
+        - Rambler
         - Wordless
         - A new game
         - Gamification (streaks, milestones, coins)

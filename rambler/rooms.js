@@ -312,7 +312,7 @@ function finishRound(room) {
     try {
       room.onFinish(room);
     } catch (e) {
-      console.error('shaker room onFinish failed:', e.message);
+      console.error('rambler room onFinish failed:', e.message);
     }
   }
 }

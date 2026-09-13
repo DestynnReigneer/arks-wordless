@@ -38,7 +38,7 @@ db.exec(`
   -- Player profiles. Deliberately not accounts: no password, no email, just a
   -- name and an avatar the family picks from a grid. Streaks and coins live
   -- here because they are the things a kid checks between rounds.
-  CREATE TABLE IF NOT EXISTS shaker_players (
+  CREATE TABLE IF NOT EXISTS rambler_players (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     avatar TEXT NOT NULL DEFAULT '🙂',
@@ -56,7 +56,7 @@ db.exec(`
 
   -- One board a day, the same for everyone in the house. The primary key is
   -- what stops a second attempt counting: you get one go at the daily.
-  CREATE TABLE IF NOT EXISTS shaker_daily (
+  CREATE TABLE IF NOT EXISTS rambler_daily (
     day TEXT NOT NULL,
     player_id TEXT NOT NULL,
     score INTEGER NOT NULL,
@@ -66,16 +66,16 @@ db.exec(`
     PRIMARY KEY (day, player_id)
   );
 
-  CREATE TABLE IF NOT EXISTS shaker_milestones (
+  CREATE TABLE IF NOT EXISTS rambler_milestones (
     player_id TEXT NOT NULL,
     code TEXT NOT NULL,
     earned_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (player_id, code)
   );
 
-  CREATE INDEX IF NOT EXISTS idx_shaker_daily_day ON shaker_daily (day, score DESC);
+  CREATE INDEX IF NOT EXISTS idx_rambler_daily_day ON rambler_daily (day, score DESC);
 
-  CREATE TABLE IF NOT EXISTS shaker_scores (
+  CREATE TABLE IF NOT EXISTS rambler_scores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     initials TEXT NOT NULL,
     score INTEGER NOT NULL,
@@ -90,8 +90,8 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
-  CREATE INDEX IF NOT EXISTS idx_shaker_board
-    ON shaker_scores (profile, board_size, score DESC);
+  CREATE INDEX IF NOT EXISTS idx_rambler_board
+    ON rambler_scores (profile, board_size, score DESC);
 
   CREATE TABLE IF NOT EXISTS theme_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -332,14 +332,14 @@ function fulfillThemeRequest(id, themeId) {
   return info.changes > 0;
 }
 
-// ---- Word Shaker ----
+// ---- Rambler ----
 // Kept on its own table and indexed by (profile, board_size) so the kids'
 // 4x4 board and an unfiltered 5x5 board never share a leaderboard -- the
 // scores simply aren't comparable.
 
-function insertShakerScore({ initials, score, mode, boardSize, profile, wordCount, bestWord, longestWord, durationSec, players }) {
+function insertRamblerScore({ initials, score, mode, boardSize, profile, wordCount, bestWord, longestWord, durationSec, players }) {
   const info = db.prepare(`
-    INSERT INTO shaker_scores
+    INSERT INTO rambler_scores
       (initials, score, mode, board_size, profile, word_count, best_word, longest_word, duration_sec, players)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
@@ -347,16 +347,16 @@ function insertShakerScore({ initials, score, mode, boardSize, profile, wordCoun
     bestWord || '', longestWord || '', durationSec, players || 1
   );
   const rank = db.prepare(`
-    SELECT COUNT(*) AS c FROM shaker_scores
+    SELECT COUNT(*) AS c FROM rambler_scores
     WHERE profile = ? AND board_size = ? AND score > ?
   `).get(profile, boardSize, score).c + 1;
   return { id: info.lastInsertRowid, score, rank };
 }
 
-function listShakerLeaderboard({ profile, boardSize, limit }) {
+function listRamblerLeaderboard({ profile, boardSize, limit }) {
   const cap = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 100);
   const rows = db.prepare(`
-    SELECT * FROM shaker_scores
+    SELECT * FROM rambler_scores
     WHERE profile = ? AND board_size = ?
     ORDER BY score DESC, word_count DESC, created_at ASC
     LIMIT ?
@@ -377,7 +377,7 @@ function listShakerLeaderboard({ profile, boardSize, limit }) {
   }));
 }
 
-// ---- Word Shaker: players, streaks, dailies, milestones ----
+// ---- Rambler: players, streaks, dailies, milestones ----
 
 function rowToPlayer(r) {
   if (!r) return null;
@@ -390,30 +390,30 @@ function rowToPlayer(r) {
 }
 
 function listPlayers() {
-  return db.prepare('SELECT * FROM shaker_players ORDER BY created_at ASC').all().map(rowToPlayer);
+  return db.prepare('SELECT * FROM rambler_players ORDER BY created_at ASC').all().map(rowToPlayer);
 }
 
 function getPlayer(id) {
-  return rowToPlayer(db.prepare('SELECT * FROM shaker_players WHERE id = ?').get(String(id || '')));
+  return rowToPlayer(db.prepare('SELECT * FROM rambler_players WHERE id = ?').get(String(id || '')));
 }
 
 function createPlayer({ id, name, avatar }) {
-  db.prepare('INSERT INTO shaker_players (id, name, avatar) VALUES (?, ?, ?)').run(id, name, avatar);
+  db.prepare('INSERT INTO rambler_players (id, name, avatar) VALUES (?, ?, ?)').run(id, name, avatar);
   return getPlayer(id);
 }
 
 function updatePlayer(id, { name, avatar }) {
   const p = getPlayer(id);
   if (!p) return null;
-  db.prepare('UPDATE shaker_players SET name = ?, avatar = ? WHERE id = ?')
+  db.prepare('UPDATE rambler_players SET name = ?, avatar = ? WHERE id = ?')
     .run(name || p.name, avatar || p.avatar, id);
   return getPlayer(id);
 }
 
 function deletePlayer(id) {
-  const info = db.prepare('DELETE FROM shaker_players WHERE id = ?').run(id);
-  db.prepare('DELETE FROM shaker_milestones WHERE player_id = ?').run(id);
-  db.prepare('DELETE FROM shaker_daily WHERE player_id = ?').run(id);
+  const info = db.prepare('DELETE FROM rambler_players WHERE id = ?').run(id);
+  db.prepare('DELETE FROM rambler_milestones WHERE player_id = ?').run(id);
+  db.prepare('DELETE FROM rambler_daily WHERE player_id = ?').run(id);
   return info.changes > 0;
 }
 
@@ -424,7 +424,7 @@ function applyPlayerRound(id, { score, bestWord, marathonScore, coins, streak, l
   const p = getPlayer(id);
   if (!p) return null;
   db.prepare(`
-    UPDATE shaker_players SET
+    UPDATE rambler_players SET
       games = games + 1,
       total_score = total_score + ?,
       best_score = MAX(best_score, ?),
@@ -446,35 +446,35 @@ function applyPlayerRound(id, { score, bestWord, marathonScore, coins, streak, l
 // Guarded in SQL rather than in JS: the WHERE clause is what prevents a
 // double-tap on the hint button spending coins that aren't there.
 function spendCoins(id, amount) {
-  const info = db.prepare('UPDATE shaker_players SET coins = coins - ? WHERE id = ? AND coins >= ?')
+  const info = db.prepare('UPDATE rambler_players SET coins = coins - ? WHERE id = ? AND coins >= ?')
     .run(amount, id, amount);
   return info.changes > 0 ? getPlayer(id) : null;
 }
 
 function grantCoins(id, amount) {
-  db.prepare('UPDATE shaker_players SET coins = coins + ? WHERE id = ?').run(amount, id);
+  db.prepare('UPDATE rambler_players SET coins = coins + ? WHERE id = ?').run(amount, id);
   return getPlayer(id);
 }
 
 function listMilestones(playerId) {
-  return db.prepare('SELECT code, earned_at FROM shaker_milestones WHERE player_id = ?')
+  return db.prepare('SELECT code, earned_at FROM rambler_milestones WHERE player_id = ?')
     .all(playerId).map(r => ({ code: r.code, earnedAt: r.earned_at }));
 }
 
 function awardMilestone(playerId, code) {
-  const info = db.prepare('INSERT OR IGNORE INTO shaker_milestones (player_id, code) VALUES (?, ?)')
+  const info = db.prepare('INSERT OR IGNORE INTO rambler_milestones (player_id, code) VALUES (?, ?)')
     .run(playerId, code);
   return info.changes > 0;
 }
 
 function getDailyResult(day, playerId) {
-  const r = db.prepare('SELECT * FROM shaker_daily WHERE day = ? AND player_id = ?').get(day, playerId);
+  const r = db.prepare('SELECT * FROM rambler_daily WHERE day = ? AND player_id = ?').get(day, playerId);
   return r ? { day: r.day, playerId: r.player_id, score: r.score, words: r.words, bestWord: r.best_word } : null;
 }
 
 function recordDaily({ day, playerId, score, words, bestWord }) {
   const info = db.prepare(`
-    INSERT OR IGNORE INTO shaker_daily (day, player_id, score, words, best_word)
+    INSERT OR IGNORE INTO rambler_daily (day, player_id, score, words, best_word)
     VALUES (?, ?, ?, ?, ?)
   `).run(day, playerId, score, words, bestWord || '');
   return info.changes > 0;
@@ -482,8 +482,8 @@ function recordDaily({ day, playerId, score, words, bestWord }) {
 
 function listDaily(day) {
   return db.prepare(`
-    SELECT d.*, p.name, p.avatar FROM shaker_daily d
-    LEFT JOIN shaker_players p ON p.id = d.player_id
+    SELECT d.*, p.name, p.avatar FROM rambler_daily d
+    LEFT JOIN rambler_players p ON p.id = d.player_id
     WHERE d.day = ? ORDER BY d.score DESC, d.created_at ASC
   `).all(day).map(r => ({
     playerId: r.player_id, name: r.name || 'Unknown', avatar: r.avatar || '🙂',
@@ -504,8 +504,8 @@ module.exports = {
   listThemeRequests,
   dismissThemeRequest,
   fulfillThemeRequest,
-  insertShakerScore,
-  listShakerLeaderboard,
+  insertRamblerScore,
+  listRamblerLeaderboard,
   listPlayers,
   getPlayer,
   createPlayer,

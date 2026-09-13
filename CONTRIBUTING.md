@@ -15,10 +15,10 @@ healthcheck has to go green.
 
 ## Layout
 
-- `server.js` — Express app; Wordless routes live here, Word Shaker is mounted
-  from `shaker/routes.js`
+- `server.js` — Express app; Wordless routes live here, Rambler is mounted
+  from `rambler/routes.js`
 - `db.js` — every table for both games, plus the Wordless scoring formula
-- `shaker/` — Word Shaker, self-contained; see the README for what each file does
+- `rambler/` — Rambler, self-contained; see the README for what each file does
 - `words/` — the dictionaries, plain text, edit by hand
 - `test/` — `unit.test.js` needs no server, `api.test.js` needs the one the
   runner starts

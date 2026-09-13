@@ -15,7 +15,7 @@ body:
     attributes:
       label: Which game?
       options:
-        - Word Shaker
+        - Rambler
         - Wordless
         - The arcade hub
         - Admin panel

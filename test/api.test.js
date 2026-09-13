@@ -7,8 +7,8 @@
 const path = require('node:path');
 
 async function run({ base, root }) {
-  const solver = require(path.join(root, 'shaker/solver.js'));
-  const API = base + '/api/shaker';
+  const solver = require(path.join(root, 'rambler/solver.js'));
+  const API = base + '/api/rambler';
 
   let pass = 0;
   let fail = 0;

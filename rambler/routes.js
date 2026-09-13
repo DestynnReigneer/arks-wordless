@@ -193,7 +193,7 @@ router.post('/score', scoreLimiter, (req, res, next) => {
 // ---- leaderboard -----------------------------------------------------------
 
 router.get('/leaderboard', (req, res) => {
-  res.json(db.listShakerLeaderboard({
+  res.json(db.listRamblerLeaderboard({
     profile: profileOf(req.query.profile),
     boardSize: round.SIZES.includes(Number(req.query.size)) ? Number(req.query.size) : 4,
     limit: req.query.limit
@@ -235,7 +235,7 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
     const player = result.results.find(r => r.playerId === playerId);
     if (!player) throw fail('Unknown player for that round.', 400);
 
-    const saved = db.insertShakerScore({
+    const saved = db.insertRamblerScore({
       initials,
       score: player.score,
       mode,
@@ -564,7 +564,7 @@ router.delete('/players/:id', (req, res, next) => {
 // than an HTML stack trace.
 router.use((err, req, res, _next) => {
   const status = err.status || 500;
-  if (status >= 500) console.error('shaker:', err);
+  if (status >= 500) console.error('rambler:', err);
   res.status(status).json({ error: status >= 500 ? 'Something went wrong.' : err.message });
 });
 

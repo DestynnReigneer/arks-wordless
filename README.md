@@ -15,7 +15,7 @@ A themed word-guessing game, Wordle-style.
 - A shared, persistent leaderboard — per theme, and an "All Themes" combined view
 - Kids submit theme ideas from the game; you get notified on Discord and fulfill them from an admin panel
 
-### Word Shaker (`/shaker.html`)
+### Rambler (`/rambler.html`)
 
 A dice-and-grid word hunt against the clock. (Boggle-style — "Boggle" is a Hasbro trademark, hence the different name.)
 
@@ -59,9 +59,9 @@ The server side of Marathon, profiles, streaks, dailies, milestones, coins and h
 | Daily challenge | done | not built |
 | Hints | done | not built |
 
-#### The Word Shaker API
+#### The Rambler API
 
-Everything lives under `/api/shaker`.
+Everything lives under `/api/rambler`.
 
 | Route | What it does |
 |---|---|
@@ -176,7 +176,7 @@ Put this behind a reverse proxy (Caddy/Traefik/NPM) for HTTPS before exposing it
 |---|---|---|
 | `ADMIN_TOKEN` | Yes, for admin features | Shared secret for `public/admin.html`. Without it, theme creation/deletion and viewing theme requests are disabled entirely. |
 | `DISCORD_WEBHOOK_URL` | No | Discord incoming webhook URL. When set, a message is posted whenever a kid submits a theme suggestion. |
-| `ADULT_PIN` | No | Locks Word Shaker's Unfiltered dictionary behind a PIN. Leave it blank and a confirmation tap is the only thing guarding it, which is fine on a LAN — set it once the server is reachable from outside. |
+| `ADULT_PIN` | No | Locks Rambler's Unfiltered dictionary behind a PIN. Leave it blank and a confirmation tap is the only thing guarding it, which is fine on a LAN — set it once the server is reachable from outside. |
 | `PORT` | No | Defaults to `3000`. |
 
 ## Admin panel
@@ -189,10 +189,10 @@ Visit `/admin.html`, enter your `ADMIN_TOKEN`, and you can:
 ## Project structure
 
 ```
-server.js                 Express app, Wordless API routes, mounts the Shaker router
+server.js                 Express app, Wordless API routes, mounts the Rambler router
 db.js                     SQLite schema for both games, built-in themes, Wordless scoring
 
-shaker/                   Word Shaker, self-contained
+rambler/                   Rambler, self-contained
   dice.js                 The real printed die faces, board rolling, path finding
   dictionary.js           Word lists -> one trie, with a profile bitmask per word
   solver.js               Finds every word on a board (~1ms for 4x4)
@@ -200,13 +200,13 @@ shaker/                   Word Shaker, self-contained
   boards.js               Server-side board store, so scoring never trusts the client
   round.js                Board creation, word validation, end-of-round scoring
   rooms.js                In-memory multi-device rooms over Server-Sent Events
-  routes.js               Everything under /api/shaker
+  routes.js               Everything under /api/rambler
 
 words/                    Dictionaries, baked into the image (see above)
 
 public/index.html         The arcade hub
 public/wordless.html/.js  Wordless
-public/shaker.html/.js    Word Shaker
+public/rambler.html/.js    Rambler
 public/admin.html/.js     Admin panel
 
 Dockerfile

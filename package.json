@@ -1,7 +1,7 @@
 {
   "name": "wordless-arcade",
   "version": "1.0.0",
-  "description": "A self-hosted arcade of word games: Wordless (themed Wordle-style) and Word Shaker (dice-and-grid word hunt) on one Node + SQLite container.",
+  "description": "A self-hosted arcade of word games: Wordless (themed Wordle-style) and Rambler (dice-and-grid word hunt) on one Node + SQLite container.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

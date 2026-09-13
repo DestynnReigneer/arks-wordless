@@ -1,11 +1,11 @@
 'use strict';
 
-// Word Shaker client.
+// Rambler client.
 //
 // Four modes share one board and one scoring path. The server owns the board
 // and every verdict; this file owns the clock, the dragging, and the fuss.
 
-const API = '/api/shaker';
+const API = '/api/rambler';
 const $ = id => document.getElementById(id);
 
 const S = {
@@ -715,7 +715,7 @@ function renderSetup() {
 }
 
 function pickProfile(value) {
-  if (value !== 'adult' || sessionStorage.getItem('shaker.adult') === 'yes') {
+  if (value !== 'adult' || sessionStorage.getItem('rambler.adult') === 'yes') {
     S.profile = value;
     renderSetup();
     return;
@@ -921,7 +921,7 @@ function bind() {
       if (!pin) return say($('adultMsg'), 'Enter the PIN.', 'err');
       S.adultPin = pin;
     }
-    sessionStorage.setItem('shaker.adult', 'yes');
+    sessionStorage.setItem('rambler.adult', 'yes');
     S.profile = 'adult';
     $('adultOverlay').classList.add('hidden');
     renderSetup();

@@ -2,8 +2,8 @@ const path = require('node:path');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const db = require('./db');
-const dictionary = require('./shaker/dictionary');
-const shakerRoutes = require('./shaker/routes');
+const dictionary = require('./rambler/dictionary');
+const ramblerRoutes = require('./rambler/routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,9 +14,9 @@ app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Word Shaker lives behind its own router; everything it needs is under
-// shaker/ so this file stays about the arcade as a whole.
-app.use('/api/shaker', shakerRoutes);
+// Rambler lives behind its own router; everything it needs is under
+// rambler/ so this file stays about the arcade as a whole.
+app.use('/api/rambler', ramblerRoutes);
 
 const WORD_RE = /^[a-zA-Z]{3,10}$/;
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
@@ -191,7 +191,7 @@ app.listen(PORT, () => {
   const stats = dictionary.stats;
   console.log(`Wordless Arcade running at http://localhost:${PORT}`);
   console.log(
-    `Word Shaker dictionary: ${stats.kids.toLocaleString()} kids / ` +
+    `Rambler dictionary: ${stats.kids.toLocaleString()} kids / ` +
     `${stats.adult.toLocaleString()} unfiltered words (${stats.buildMs}ms)`
   );
   if (!ADMIN_TOKEN) {
