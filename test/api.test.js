@@ -31,6 +31,22 @@ async function run({ base, root }) {
 
   const square = n => ({ cols: n, rows: n });
 
+  const ADMIN = 'test-admin-token';
+  async function admin(p, method = 'GET', body, token = ADMIN) {
+    const res = await fetch(API + '/admin' + p, {
+      method,
+      headers: {
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { 'X-Admin-Token': token } : {})
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch { data = text; }
+    return { status: res.status, data };
+  }
+
   console.log('\n-- config --');
   const cfg = await api('/config');
   ok('config responds', cfg.status === 200);
@@ -79,6 +95,88 @@ async function run({ base, root }) {
   ok('bad initials are refused', badInitials.status === 400);
   ok('an unknown board is a 404', (await api('/check', 'POST', { boardId: 'deadbeef', word: 'CAT' })).status === 404);
 
+  console.log('\n-- the arcade board --');
+  const arcadeBoard = await api('/arcade?board=4');
+  ok('the board reports its shape', arcadeBoard.data.slots === 10 && arcadeBoard.data.boardKey === '4',
+    JSON.stringify({ slots: arcadeBoard.data.slots, key: arcadeBoard.data.boardKey }));
+  ok('and lists the three boards', arcadeBoard.data.boards.length === 3,
+    JSON.stringify(arcadeBoard.data.boards.map(b => b.key)));
+
+  // Fill every slot, then try to get on with a score that does not deserve it.
+  for (let i = 0; i < 12; i++) {
+    const b = await api('/board', 'POST', { size: 4, profile: 'kids' });
+    const words = solver.solveWords(b.data.board, square(4), 'kids')
+      .filter(w => w.length >= 5).slice(0, 3 + (i % 4));
+    await api('/score', 'POST', { boardId: b.data.boardId, players: [{ id: 'p0', name: 'F', words }] });
+    await api('/leaderboard', 'POST', {
+      boardId: b.data.boardId, playerId: 'p0', mode: 'solo', initials: 'F' + i
+    });
+  }
+  const full = await api('/arcade?board=4');
+  ok('the board never exceeds ten slots', full.data.entries.length <= 10, String(full.data.entries.length));
+  ok('it is sorted best first', full.data.entries.every((e, i, a) => i === 0 || a[i - 1].score >= e.score));
+
+  const boardIsFull = full.data.entries.length === 10 && full.data.entries[9].score > 1;
+
+  // A round worth almost nothing cannot buy a slot on a full board.
+  const cheapBoard = await api('/board', 'POST', { size: 4, profile: 'kids' });
+  const oneWord = solver.solveWords(cheapBoard.data.board, square(4), 'kids').find(w => w.length === 3);
+  await api('/score', 'POST', {
+    boardId: cheapBoard.data.boardId, players: [{ id: 'p0', name: 'Low', words: [oneWord] }]
+  });
+  const rejected = await api('/leaderboard', 'POST', {
+    boardId: cheapBoard.data.boardId, playerId: 'p0', mode: 'solo', initials: 'LOW'
+  });
+  ok('a score that misses the cut is refused entry',
+    !boardIsFull || rejected.data.made === false, JSON.stringify(rejected.data).slice(0, 120));
+  ok('and is told how far short it fell',
+    !boardIsFull || (typeof rejected.data.shortBy === 'number' && rejected.data.shortBy > 0),
+    String(rejected.data.shortBy));
+  ok('missing the board is not an error', rejected.status === 200 || rejected.status === 201,
+    String(rejected.status));
+
+  // A big score gets on and knocks the bottom entry off for good.
+  //
+  // Boards are random, and a weak one can yield fewer points than the current
+  // cutoff -- which made this assertion pass or fail on the luck of the roll.
+  // Roll until the round is genuinely good enough, so the test is about the
+  // board's eviction rule rather than the dice.
+  const beforeTop = (await api('/arcade?board=4')).data.entries;
+  const needed = beforeTop.length === 10 ? beforeTop[9].score : 0;
+  const pointsOf = w => (w.length <= 4 ? 1 : w.length === 5 ? 2 : w.length === 6 ? 3 : w.length === 7 ? 5 : 11);
+
+  let bigBoard = null;
+  let many = [];
+  for (let attempt = 0; attempt < 25; attempt++) {
+    bigBoard = await api('/board', 'POST', { size: 4, profile: 'kids' });
+    many = solver.solveWords(bigBoard.data.board, square(4), 'kids').slice(0, 60);
+    if (many.reduce((a, w) => a + pointsOf(w), 0) > needed) break;
+  }
+  ok('found a round good enough to challenge the board',
+    many.reduce((a, w) => a + pointsOf(w), 0) > needed,
+    `needed more than ${needed}`);
+
+  await api('/score', 'POST', {
+    boardId: bigBoard.data.boardId, players: [{ id: 'p0', name: 'Big', words: many }]
+  });
+  const big = await api('/leaderboard', 'POST', {
+    boardId: bigBoard.data.boardId, playerId: 'p0', mode: 'solo', initials: 'BIG'
+  });
+  ok('a big score makes the board', big.data.made === true, JSON.stringify(big.data).slice(0, 140));
+  ok('and is told which slot it took', big.data.rank >= 1, String(big.data.rank));
+  const afterTop = (await api('/arcade?board=4')).data.entries;
+  ok('the board is still capped after the insert', afterTop.length <= 10, String(afterTop.length));
+  ok('somebody was knocked off to make room',
+    beforeTop.length < 10 || (Array.isArray(big.data.evicted) && big.data.evicted.length >= 1),
+    JSON.stringify(big.data.evicted));
+
+  // Marathon keeps its own wall.
+  const maraWall = await api('/arcade?board=marathon');
+  ok('marathon has a board of its own', maraWall.data.boardKey === 'marathon');
+  ok('and the 4x4 scores did not leak into it',
+    maraWall.data.entries.every(e => e.mode === 'marathon'),
+    JSON.stringify(maraWall.data.entries.map(e => e.mode)));
+
   console.log('\n-- difficulty --');
   const easy = await api('/board', 'POST', { size: 4, difficulty: 'easy' });
   const hard = await api('/board', 'POST', { size: 4, difficulty: 'hard' });
@@ -101,7 +199,7 @@ async function run({ base, root }) {
   const dWords = solver.solveWords(daily.data.board, square(4), 'kids', { min: daily.data.minLength })
     .filter(w => w.length >= 5).slice(0, 6);
   const dScore = await api('/score', 'POST', {
-    boardId: daily.data.boardId, playerId: pid,
+    boardId: daily.data.boardId, profileId: pid,
     players: [{ id: 'p0', name: 'Tester', words: dWords }]
   });
   ok('the daily round records progress', !!dScore.data.progress);
@@ -149,6 +247,96 @@ async function run({ base, root }) {
   ok('the run finishes with a score', typeof done.data.finalScore === 'number');
   ok('and banks progress', !!done.data.progress);
   ok('nothing counts afterwards', (await api(`/marathon/${mid}/word`, 'POST', { word: 'CAT' })).status === 409);
+
+  console.log('\n-- seasons --');
+  const season = await api('/season');
+  ok('there is always a current season', !!season.data.season && !!season.data.season.label,
+    JSON.stringify(season.data.season));
+  ok('it reports how it ends', typeof season.data.intervalLabel === 'string', season.data.intervalLabel);
+  ok('and carries the slot count', season.data.slots === 10);
+  ok('the countdown is quiet while the end is far off',
+    season.data.daysLeft === null || typeof season.data.closingSoon === 'boolean');
+
+  console.log('\n-- admin is locked --');
+  ok('no token is refused', (await admin('/overview', 'GET', undefined, null)).status === 401);
+  ok('a wrong token is refused', (await admin('/overview', 'GET', undefined, 'nope')).status === 401);
+  ok('the right token is let in', (await admin('/overview')).status === 200);
+
+  console.log('\n-- admin: seasons --');
+  const overview = await admin('/overview');
+  ok('overview carries every board', overview.data.boards.length === 3);
+  ok('and the profile list', Array.isArray(overview.data.players));
+
+  const settings = await admin('/seasons/settings', 'POST', { interval: { unit: 'weeks', every: 2 }, warnDays: 3 });
+  ok('the schedule can be changed', settings.data.intervalLabel === 'every 2 weeks', settings.data.intervalLabel);
+  ok('and the warning window with it', settings.data.warnDays === 3, String(settings.data.warnDays));
+
+  // Put a score up so the season has something to freeze.
+  const seasonPlayer = await api('/players', 'POST', { name: 'Seasonal' });
+  const sBoard = await api('/board', 'POST', { size: 4, profile: 'kids' });
+  const sWords = solver.solveWords(sBoard.data.board, square(4), 'kids').slice(0, 30);
+  await api('/score', 'POST', {
+    boardId: sBoard.data.boardId, profileId: seasonPlayer.data.id,
+    players: [{ id: 'p0', name: 'Seasonal', words: sWords }]
+  });
+  const seaSave = await api('/leaderboard', 'POST', {
+    boardId: sBoard.data.boardId, playerId: 'p0', profileId: seasonPlayer.data.id,
+    mode: 'solo', initials: 'SEA'
+  });
+  ok('the score was attributed to the profile that earned it', seaSave.data.made === true,
+    JSON.stringify(seaSave.data).slice(0, 120));
+  const beforeEnd = (await api('/arcade?board=4')).data.entries.length;
+  ok('a score reached the board before the season ends', beforeEnd > 0, String(beforeEnd));
+
+  ok('ending a season needs an explicit confirm',
+    (await admin('/seasons/end', 'POST', {})).status === 400);
+
+  const ended = await admin('/seasons/end', 'POST', { confirm: true });
+  ok('the season ends', ended.status === 200 && !!ended.data.ended, JSON.stringify(ended.data).slice(0, 120));
+  ok('badges were minted from the board', ended.data.minted > 0, String(ended.data.minted));
+  ok('a fresh season opened immediately', !!ended.data.next && !ended.data.next.endedAt);
+  ok('the boards are now empty', (await api('/arcade?board=4')).data.entries.length === 0);
+
+  const withBadges = await api('/season?playerId=' + seasonPlayer.data.id);
+  ok('the profile kept a badge from it', withBadges.data.badges.length > 0,
+    JSON.stringify(withBadges.data.badges).slice(0, 140));
+  ok('the badge records which board and rank',
+    withBadges.data.badges[0] && withBadges.data.badges[0].boardKey === '4' && withBadges.data.badges[0].rank >= 1,
+    JSON.stringify(withBadges.data.badges[0]));
+
+  // The point of seasons: the wall clears, the person does not.
+  const survivor = await api('/players/' + seasonPlayer.data.id);
+  ok('their streak survived the reset', survivor.data.streak >= 1, String(survivor.data.streak));
+  ok('their coins survived the reset', survivor.data.coins > 0, String(survivor.data.coins));
+  ok('their milestones survived the reset', survivor.data.earnedCount > 0, String(survivor.data.earnedCount));
+  ok('and their lifetime best survived', survivor.data.bestScore > 0, String(survivor.data.bestScore));
+
+  console.log('\n-- admin: moderation and profiles --');
+  const modBoard = await api('/board', 'POST', { size: 4, profile: 'kids' });
+  const modWords = solver.solveWords(modBoard.data.board, square(4), 'kids').slice(0, 20);
+  await api('/score', 'POST', { boardId: modBoard.data.boardId, players: [{ id: 'p0', name: 'M', words: modWords }] });
+  await api('/leaderboard', 'POST', { boardId: modBoard.data.boardId, playerId: 'p0', mode: 'solo', initials: 'RUD' });
+  const modEntries = (await admin('/overview')).data.boards.find(b => b.key === '4').entries;
+  ok('admin can see board entries with their ids', modEntries.length > 0 && !!modEntries[0].id);
+
+  const delEntry = await admin('/arcade/entry/' + modEntries[0].id, 'DELETE');
+  ok('a single entry can be removed', delEntry.status === 200);
+  ok('and it is gone from the board',
+    (await api('/arcade?board=4')).data.entries.every(e => e.initials !== 'RUD'));
+
+  ok('clearing a board needs confirm', (await admin('/arcade/4/clear', 'POST', {})).status === 400);
+  ok('a board can be cleared outright', (await admin('/arcade/4/clear', 'POST', { confirm: true })).status === 200);
+
+  const coinsBeforeGift = (await api('/players/' + seasonPlayer.data.id)).data.coins;
+  const gifted = await admin('/players/' + seasonPlayer.data.id, 'PATCH', { grantCoins: 10 });
+  ok('admin can gift coins', gifted.data.coins === coinsBeforeGift + 10,
+    `${coinsBeforeGift} -> ${gifted.data.coins}`);
+  const renamed = await admin('/players/' + seasonPlayer.data.id, 'PATCH', { name: 'Renamed By Admin' });
+  ok('admin can rename a profile', renamed.data.name === 'Renamed By Admin', renamed.data.name);
+  ok('deleting a profile needs confirm',
+    (await admin('/players/' + seasonPlayer.data.id, 'DELETE', {})).status === 400);
+  ok('admin can delete a profile',
+    (await admin('/players/' + seasonPlayer.data.id, 'DELETE', { confirm: true })).status === 200);
 
   console.log('\n-- rooms --');
   const room = await api('/rooms', 'POST', { name: 'Ada', size: 4, durationSec: 60 });

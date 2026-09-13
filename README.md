@@ -40,24 +40,34 @@ Because of Marathon, boards are rectangular internally. Anything that takes a bo
 
 #### Gamification
 
-- **Profiles** — one per person, with an avatar. Not accounts: no password, no email.
+- **Profiles** — one per person, with an avatar, picked from a "Who's playing?" screen. Not accounts: no password, no email.
 - **Streaks** — play on consecutive days and it climbs. Rolls over at *local* midnight, which is why `TZ` matters in the compose file.
 - **Daily challenge** — one board a day, the same for everyone in the house, generated from the date rather than stored. One attempt each, and a standings table. Because it comes from the date, it is reproducible anywhere and survives losing the database entirely.
 - **Milestones** — sixteen of them, from "find your first word" to "play thirty days running". Each pays coins.
+- **Seasons** — the arcade boards run on a schedule you set (monthly by default, or any interval, or manual). When a season ends every board is frozen into **badges** and then cleared, so everyone starts level. A badge records the year, season, which board, the rank and the score. Streaks, coins, milestones and lifetime bests are **never** reset — only the walls are. Players get a countdown in the last few days.
+- **The arcade board** — three walls (4x4, 5x5, Marathon), ten slots each. You only get to type your initials by beating the tenth score, and when you do, somebody is knocked off for good. Your profile keeps your personal best either way, so missing the wall costs you nothing but the wall.
 - **Coins and hints** — earned slowly, spent on a hint that reveals a word still sitting on the board. A hinted word buys you time but scores nothing, so coins can't be converted straight into points.
 
-### Not finished yet
-
-The server side of Marathon, profiles, streaks, dailies, milestones, coins and hints is **complete and tested** — every one of those is exercised by `npm test`. What is *not* built is the browser UI for them: the game page still only offers the four classic modes. The endpoints are there and documented below; the screens are the next job.
+### What has an interface
 
 | Feature | Server | UI |
 |---|---|---|
 | Solo / Pass & Play / Tabletop / Own Phones | done | done |
-| Difficulty + longer timers | done | not wired into the setup screen |
-| Marathon | done | not built |
-| Profiles / streaks / milestones / coins | done | not built |
-| Daily challenge | done | not built |
-| Hints | done | not built |
+| Marathon | done | done |
+| Profiles, streaks, coins, milestones | done | done |
+| Hints | done | done |
+| Difficulty + longer timers | done | done |
+| Arcade board (10 slots, gated entry) | done | done |
+| Seasons, badges, hall of fame | done | done |
+| Admin: seasons, moderation, profiles | done | done |
+| Daily challenge | done | **not built** |
+
+The daily challenge is the last one without a screen. `GET /daily` returns the
+board and the standings; nothing calls it yet.
+
+The classic modes are also still off the ARKS colour spec — Marathon and the
+profile screens were built to it, the four original modes were not.
+`docs/DESIGN.md` lists exactly which values are wrong.
 
 #### The Rambler API
 
@@ -181,7 +191,17 @@ Put this behind a reverse proxy (Caddy/Traefik/NPM) for HTTPS before exposing it
 
 ## Admin panel
 
-Visit `/admin.html`, enter your `ADMIN_TOKEN`, and you can:
+Visit `/admin.html` and enter your `ADMIN_TOKEN`. Two tabs.
+
+**Rambler:**
+- See the current season, how long is left, and rename it ("Spooky Season")
+- Change the reset schedule — every N days/weeks/months, or manual only — and how many days out players get warned
+- End a season immediately: freezes every board into badges, then clears them
+- Moderate the boards: remove a single entry (for when a child puts something unrepeatable in their three letters) or clear a whole board
+- Manage profiles: rename, gift coins, delete
+- Hall of fame: every finished season and who won each board
+
+**Wordless:**
 - See pending theme requests, with a one-click "Copy Prompt" to paste into an AI chatbot (or use however you like) to generate the theme's word list
 - Paste the resulting JSON back in to create the theme and mark the request fulfilled
 - Delete custom themes

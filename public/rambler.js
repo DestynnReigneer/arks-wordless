@@ -15,7 +15,10 @@ const S = {
   duration: 180,
   profile: 'kids',
   difficulty: 'normal',
-  player: null,          // profile picker is not built yet; hints need one
+  season: null,          // current season + countdown, from /config and /season
+  player: null,          // the profile currently playing; null means guest
+  players: [],
+  avatars: [],
   adultPin: '',
 
   // single-device round
@@ -76,8 +79,8 @@ function mmss(ms) {
 }
 
 function screen(name) {
-  for (const id of ['setupScreen', 'lobbyScreen', 'gateScreen', 'playScreen', 'entryScreen',
-                    'resultsScreen', 'marathonScreen', 'maraResultsScreen']) {
+  for (const id of ['setupScreen', 'profileScreen', 'lobbyScreen', 'gateScreen', 'playScreen',
+                    'entryScreen', 'resultsScreen', 'marathonScreen', 'maraResultsScreen']) {
     $(id).classList.toggle('hidden', id !== `${name}Screen`);
   }
   window.scrollTo(0, 0);
@@ -436,12 +439,258 @@ async function finishSingleDevice() {
   try {
     const results = await api('/score', {
       method: 'POST',
-      body: { boardId: S.boardId, players: S.submissions }
+      body: {
+        boardId: S.boardId,
+        players: S.submissions,
+        // Solo banks for the signed-in profile. In a shared-device game there
+        // is no way to know which player is the profile, so nothing is banked.
+        profileId: S.mode === 'solo' && S.player ? S.player.id : undefined
+      }
     });
     showResults(results);
   } catch (e) {
     alert(e.message);
     screen('setup');
+  }
+}
+
+// ---------------------------------------------------------------- profiles
+
+// Profiles are not accounts: no password, no email, no session. A name and a
+// face, stored on the server so a streak survives clearing the browser, with
+// only the chosen id kept locally.
+const PROFILE_KEY = 'rambler.playerId';
+
+async function loadProfiles() {
+  try {
+    const data = await api('/players');
+    S.players = data.players || [];
+    S.avatars = data.avatars || [];
+  } catch {
+    S.players = [];
+    S.avatars = [];
+  }
+
+  // Re-check the remembered profile against the server: it may have been
+  // deleted on another device, and a stale id would silently bank nothing.
+  const saved = localStorage.getItem(PROFILE_KEY);
+  S.player = saved ? S.players.find(p => p.id === saved) || null : null;
+  if (saved && !S.player) localStorage.removeItem(PROFILE_KEY);
+  renderProfileChip();
+}
+
+function setProfile(player) {
+  S.player = player;
+  if (player) localStorage.setItem(PROFILE_KEY, player.id);
+  else localStorage.removeItem(PROFILE_KEY);
+  renderProfileChip();
+  renderMaraFound();
+}
+
+function profileMeta(p) {
+  if (!p) return '';
+  const bits = [];
+  if (p.streak > 0) bits.push(`\u{1F525} ${p.streak}`);
+  bits.push(`${p.coins} \u{1FA99}`);
+  return bits.join(' \u00B7 ');
+}
+
+function renderProfileChip() {
+  const chip = $('profileBtn');
+  chip.classList.toggle('signed', !!S.player);
+  $('pcAvatar').textContent = S.player ? S.player.avatar : '\u{1F464}';
+  $('pcName').textContent = S.player ? S.player.name : 'Guest';
+  $('pcMeta').textContent = S.player ? profileMeta(S.player) : 'tap to pick';
+}
+
+async function showProfilePicker() {
+  await loadProfiles();
+  const host = $('whoGrid');
+  host.innerHTML = '';
+
+  for (const p of S.players) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'who-tile' + (S.player && S.player.id === p.id ? ' current' : '');
+    tile.innerHTML = '<span class="av"></span><span class="nm"></span><span class="sub"></span>';
+    tile.querySelector('.av').textContent = p.avatar;
+    tile.querySelector('.nm').textContent = p.name;
+    tile.querySelector('.sub').textContent = p.games ? profileMeta(p) : 'new';
+    tile.onclick = () => {
+      Sound.arm();
+      Sound.coin();
+      setProfile(p);
+      screen('setup');
+      renderSetup();
+    };
+    host.appendChild(tile);
+  }
+
+  if (S.players.length < 12) {
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'who-tile add';
+    add.innerHTML = '<span class="av">+</span><span class="nm">Add</span><span class="sub">new profile</span>';
+    add.onclick = () => openProfileEditor(null);
+    host.appendChild(add);
+  }
+
+  screen('profile');
+}
+
+let editingId = null;
+let chosenAvatar = null;
+
+function openProfileEditor(player) {
+  editingId = player ? player.id : null;
+  chosenAvatar = player ? player.avatar : (S.avatars[0] || '\u{1F98A}');
+  $('newProfileTitle').textContent = player ? 'Edit profile' : 'New profile';
+  $('profileNameInput').value = player ? player.name : '';
+  $('deleteProfileBtn').classList.toggle('hidden', !player);
+  say($('newProfileMsg'), '');
+  renderAvatarGrid();
+  $('newProfileOverlay').classList.remove('hidden');
+  $('profileNameInput').focus();
+}
+
+function renderAvatarGrid() {
+  const host = $('avatarGrid');
+  host.innerHTML = '';
+  for (const a of S.avatars) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = a;
+    b.setAttribute('aria-pressed', String(a === chosenAvatar));
+    b.onclick = () => { chosenAvatar = a; renderAvatarGrid(); };
+    host.appendChild(b);
+  }
+}
+
+async function saveProfile() {
+  const name = $('profileNameInput').value.trim();
+  if (!name) return say($('newProfileMsg'), 'Give it a name.', 'err');
+  try {
+    const saved = editingId
+      ? await api(`/players/${editingId}`, { method: 'PATCH', body: { name, avatar: chosenAvatar } })
+      : await api('/players', { method: 'POST', body: { name, avatar: chosenAvatar } });
+    $('newProfileOverlay').classList.add('hidden');
+    Sound.coin();
+    setProfile(saved);
+    await showProfilePicker();
+  } catch (e) {
+    say($('newProfileMsg'), e.message, 'err');
+  }
+}
+
+async function removeProfile() {
+  if (!editingId) return;
+  const p = S.players.find(x => x.id === editingId);
+  if (!confirm(`Delete ${p ? p.name : 'this profile'}? Their streak, coins and milestones go with it.`)) return;
+  try {
+    await api(`/players/${editingId}`, { method: 'DELETE' });
+    if (S.player && S.player.id === editingId) setProfile(null);
+    $('newProfileOverlay').classList.add('hidden');
+    await showProfilePicker();
+  } catch (e) {
+    say($('newProfileMsg'), e.message, 'err');
+  }
+}
+
+async function openProfileDetail() {
+  if (!S.player) return showProfilePicker();
+  let full;
+  try {
+    full = await api(`/players/${S.player.id}`);
+  } catch {
+    return showProfilePicker();
+  }
+  S.player = { ...S.player, ...full };
+  renderProfileChip();
+
+  $('pdTitle').textContent = `${full.avatar} ${full.name}`;
+
+  const stats = [
+    ['Streak', full.streak + (full.streak === 1 ? ' day' : ' days')],
+    ['Best streak', full.longestStreak],
+    ['Coins', full.coins],
+    ['Rounds', full.games],
+    ['Best score', full.bestScore],
+    ['Marathon', full.bestMarathon],
+    ['Longest word', full.bestWord || '\u2014']
+  ];
+  $('pdStats').innerHTML = '';
+  for (const [label, value] of stats) {
+    const el = document.createElement('div');
+    el.className = 'pdstat';
+    el.innerHTML = '<span></span><b></b>';
+    el.querySelector('span').textContent = label;
+    el.querySelector('b').textContent = String(value);
+    $('pdStats').appendChild(el);
+  }
+
+  // Season badges: what they took home from boards that have since cleared.
+  let badges = [];
+  try {
+    const seasonData = await api(`/season?playerId=${full.id}`);
+    badges = seasonData.badges || [];
+    S.season = seasonData;
+  } catch { badges = []; }
+
+  $('pdBadgeCount').textContent = badges.length ? String(badges.length) : '';
+  const badgeHost = $('pdBadges');
+  badgeHost.innerHTML = '';
+  if (!badges.length) {
+    badgeHost.innerHTML =
+      '<div class="note">None yet. Hold a slot on any board when a season ends and it becomes a badge.</div>';
+  } else {
+    for (const b of badges) {
+      const el = document.createElement('div');
+      el.className = 'badge' + (b.rank === 1 ? ' gold' : '');
+      el.innerHTML =
+        '<div class="bg-rank"></div><div class="bg-board"></div>' +
+        '<div class="bg-season"></div><div class="bg-score"></div>';
+      el.querySelector('.bg-rank').textContent = b.rank === 1 ? '\u{1F3C6}' : `#${b.rank}`;
+      el.querySelector('.bg-board').textContent = boardName(b.boardKey);
+      el.querySelector('.bg-season').textContent = b.seasonLabel;
+      el.querySelector('.bg-score').textContent = `${b.score} pts`;
+      badgeHost.appendChild(el);
+    }
+  }
+
+  $('pdMsCount').textContent = `${full.earnedCount}/${full.milestoneTotal}`;
+  const host = $('msGrid');
+  host.innerHTML = '';
+  for (const m of full.milestones) {
+    const el = document.createElement('div');
+    el.className = 'ms' + (m.earned ? ' earned' : '');
+    el.title = m.blurb + (m.earned ? '' : ` \u2014 ${m.coins} coins`);
+    el.innerHTML = '<div class="em"></div><span class="lb"></span>';
+    el.querySelector('.em').textContent = m.emoji;
+    el.querySelector('.lb').textContent = m.earned ? m.label : m.blurb;
+    host.appendChild(el);
+  }
+
+  $('profileDetailOverlay').classList.remove('hidden');
+}
+
+// A hint on a classic board. Costs coins; the word still has to be found on
+// the grid, so it buys a direction rather than the points.
+async function classicHint() {
+  if (!S.player) {
+    alert('Hints cost coins — pick a profile first.');
+    return showProfilePicker();
+  }
+  try {
+    const r = await api('/hint', {
+      method: 'POST',
+      body: { boardId: S.boardId, playerId: S.player.id, found: S.found.map(f => f.word) }
+    });
+    S.player.coins = r.coins;
+    renderProfileChip();
+    Sound.coin();
+    Fx.banner(r.word, `hint \u2014 cost ${r.cost} coins`, { tone: 'teal', ms: 1700 });
+  } catch (e) {
+    alert(e.message);
   }
 }
 
@@ -672,7 +921,7 @@ async function endMarathon() {
   try {
     done = await api(`/marathon/${M.id}/finish`, {
       method: 'POST',
-      body: S.player ? { playerId: S.player.id } : {}
+      body: S.player ? { profileId: S.player.id } : {}
     });
   } catch (e) {
     backToSetup();
@@ -708,7 +957,8 @@ function showMarathonResults(done) {
     $('maraStats').appendChild(el);
   }
 
-  say($('maraSaveMsg'), '');
+  say($('maraSaveMsg'), done.arcade ? arcadeVerdictText(done.arcade) : '',
+    done.arcade && done.arcade.makesBoard ? 'ok' : '');
   buildLadder(done);
 }
 
@@ -721,7 +971,8 @@ async function buildLadder(done) {
 
   let rows = [];
   try {
-    rows = await api(`/leaderboard?profile=${S.profile}&mode=marathon&limit=8`);
+    const wall = await api('/arcade?board=marathon');
+    rows = wall.entries || [];
   } catch { rows = []; }
 
   // Worst first, because the climb goes upward through them.
@@ -780,7 +1031,10 @@ function celebrateProgress(p) {
 }
 
 async function saveMarathonScore(initials) {
-  return api('/leaderboard', { method: 'POST', body: { marathonId: M.id, initials } });
+  return api('/leaderboard', {
+    method: 'POST',
+    body: { marathonId: M.id, initials, profileId: S.player ? S.player.id : undefined }
+  });
 }
 
 // ------------------------------------------------------------------- rooms
@@ -965,6 +1219,13 @@ function showResults(results) {
     : `${results.missedTotal} words went unfound, out of ${results.totalWords} on the board.`;
   chips($('missedChips'), results.missed.map(m => ({ word: m.word, points: m.points })));
 
+  if (results.progress) celebrateProgress(results.progress);
+  if (results.progress && results.progress.player) {
+    S.player = results.progress.player;
+    renderProfileChip();
+  }
+  showArcadePanel(results.arcade, scoreTarget() ? scoreTarget().score : 0);
+  refreshSeason();
   $('saveScoreBtn').classList.toggle('hidden', !canSaveScore());
   $('againBtn').textContent = S.mode === 'room'
     ? (S.room && S.room.youAreHost ? 'New round' : 'Back to lobby')
@@ -981,51 +1242,119 @@ function scoreTarget() {
   return S.results.results[0];   // already sorted, so this is the winner
 }
 
+// The button only appears if the round actually earned a slot. On a cabinet
+// you do not get to type your initials for a score that missed.
 function canSaveScore() {
   const target = scoreTarget();
-  return !!target && target.score > 0;
+  if (!target || target.score <= 0) return false;
+  if (S.mode === 'room') return true;                 // rooms score per player
+  return !!(S.results && S.results.arcade && S.results.arcade.makesBoard);
+}
+
+// ------------------------------------------------------------------- season
+
+function boardName(key) {
+  return key === 'marathon' ? 'Marathon' : key === '5' ? '5x5 Big' : '4x4 Classic';
+}
+
+function seasonStripText(season) {
+  if (!season || !season.season) return '';
+  const label = season.season.label;
+  if (season.daysLeft === null) return `${label} \u00B7 runs until it is ended`;
+  if (season.daysLeft === 0) return `${label} \u00B7 ends today \u2014 last chance`;
+  if (season.closingSoon) {
+    return `${label} \u00B7 ${season.daysLeft} ${season.daysLeft === 1 ? 'day' : 'days'} left \u2014 boards clear after that`;
+  }
+  return `${label} \u00B7 ${season.daysLeft} days left`;
+}
+
+function renderSeasonStrip() {
+  const el = $('seasonStrip');
+  if (!el) return;
+  const text = seasonStripText(S.season);
+  el.textContent = text;
+  el.classList.toggle('hidden', !text);
+  el.classList.toggle('soon', !!(S.season && S.season.closingSoon));
+}
+
+async function refreshSeason() {
+  try {
+    S.season = await api('/season' + (S.player ? `?playerId=${S.player.id}` : ''));
+  } catch { /* the countdown is not worth an error */ }
+  renderSeasonStrip();
+}
+
+// -------------------------------------------------------------- arcade board
+
+// Ten slots. Empty ones are drawn as empty rather than hidden, because a
+// board with three names on it and seven blanks is an invitation.
+function renderArcadeRows(host, entries, slots, { highlightScore = null } = {}) {
+  host.innerHTML = '';
+  for (let i = 0; i < slots; i++) {
+    const e = entries[i];
+    const row = document.createElement('div');
+    row.className = 'lb-row' + (!e ? ' empty' : '');
+    if (e && highlightScore !== null && e.score === highlightScore) row.classList.add('mine');
+    row.innerHTML = '<span class="r"></span><span class="i"></span><span class="d"></span><span class="s"></span>';
+    row.querySelector('.r').textContent = String(i + 1).padStart(2, '0');
+    row.querySelector('.i').textContent = e ? e.initials : '\u2014\u2014\u2014';
+    row.querySelector('.d').textContent = e
+      ? `${e.wordCount} words${e.bestWord ? ' \u00B7 ' + e.bestWord : ''}`
+      : 'free slot';
+    row.querySelector('.s').textContent = e ? String(e.score) : '';
+    host.appendChild(row);
+  }
+}
+
+function arcadeVerdictText(a) {
+  if (!a) return '';
+  if (a.makesBoard) {
+    // The count is what is left *after* this score takes its slot.
+    const freeAfter = Math.max(0, a.slots - a.filled - 1);
+    if (a.filled >= a.slots) return `Good enough for number ${a.rank}. Somebody is coming off.`;
+    return freeAfter
+      ? `Slot ${a.rank} of ${a.slots} is yours \u2014 ${freeAfter} still free.`
+      : `Slot ${a.rank} of ${a.slots} is yours \u2014 that fills the board.`;
+  }
+  return `Not this time \u2014 ${a.shortBy} more ${a.shortBy === 1 ? 'point' : 'points'} and you were on it.`;
+}
+
+function showArcadePanel(a, score) {
+  const panel = $('arcadePanel');
+  if (!a) { panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+  $('arcadeHeading').textContent = a.makesBoard ? 'You made the board' : 'Arcade board';
+  $('arcadeVerdict').textContent = arcadeVerdictText(a);
+  renderArcadeRows($('arcadeBoardList'), a.entries || [], a.slots || 10, { highlightScore: null });
+  if (a.makesBoard) {
+    Sound.kaching();
+    Fx.banner('HIGH SCORE', `number ${a.rank}`, { tone: 'gold', ms: 2000 });
+    Fx.burst({ count: 140, coins: 22 });
+  }
 }
 
 // -------------------------------------------------------------- leaderboard
 
-const lbState = { profile: 'kids', size: 4 };
+const lbState = { board: '4' };
 
 async function openLeaderboard() {
-  lbState.profile = S.profile;
-  lbState.size = S.size;
+  lbState.board = S.mode === 'marathon' ? 'marathon' : String(S.size);
   $('leaderboardOverlay').classList.remove('hidden');
-  renderLeaderboardControls();
-  await loadLeaderboard();
-}
-
-function renderLeaderboardControls() {
-  segment($('lbProfileSeg'), S.config.profiles.map(p => ({ label: p.label, value: p.id })),
-    lbState.profile, v => { lbState.profile = v; renderLeaderboardControls(); loadLeaderboard(); });
-  segment($('lbSizeSeg'), S.config.sizes.map(s => ({ label: s.label, value: s.size })),
-    lbState.size, v => { lbState.size = v; renderLeaderboardControls(); loadLeaderboard(); });
+  renderSeasonStrip();
+  await Promise.all([loadLeaderboard(), refreshSeason()]);
 }
 
 async function loadLeaderboard() {
   const host = $('leaderboardList');
   host.innerHTML = '<div class="note">Loading…</div>';
   try {
-    const rows = await api(`/leaderboard?profile=${lbState.profile}&size=${lbState.size}&limit=25`);
-    if (!rows.length) {
-      host.innerHTML = '<div class="note">Nothing here yet. Go and win something.</div>';
-      return;
-    }
-    host.innerHTML = '';
-    rows.forEach((r, i) => {
-      const row = document.createElement('div');
-      row.className = 'lb-row';
-      row.innerHTML =
-        `<span class="r">${i + 1}</span><span class="i"></span>` +
-        `<span class="d"></span><span class="s">${r.score}</span>`;
-      row.querySelector('.i').textContent = r.initials;
-      row.querySelector('.d').textContent =
-        `${r.wordCount} words${r.bestWord ? ' · ' + r.bestWord : ''} · ${r.mode}`;
-      host.appendChild(row);
-    });
+    const data = await api(`/arcade?board=${lbState.board}`);
+    segment($('lbBoardSeg'), data.boards.map(b => ({ label: b.label, value: b.key })),
+      lbState.board, v => { lbState.board = v; loadLeaderboard(); });
+    $('lbCaption').textContent = data.filled >= data.slots
+      ? `All ${data.slots} slots taken — beat number ${data.slots} to get on.`
+      : `${data.filled} of ${data.slots} slots taken.`;
+    renderArcadeRows(host, data.entries, data.slots);
   } catch (e) {
     host.innerHTML = '<div class="note"></div>';
     host.firstChild.textContent = e.message;
@@ -1199,8 +1528,11 @@ function backToSetup() {
 function openInitials() {
   const target = scoreTarget();
   if (!target) return;
-  $('initialsWho').textContent = `Saving ${target.name}'s ${target.score} points.`;
-  for (const box of document.querySelectorAll('.initial-box')) box.value = '';
+  $('initialsWho').textContent = `${target.score} points \u2014 good enough for the board.`;
+  const boxes = [...document.querySelectorAll('.initial-box')];
+  // Prefill from the active profile, because typing AAA every round gets old.
+  const seed = (S.player ? S.player.name : '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  boxes.forEach((b, i) => { b.value = seed[i] || ''; });
   say($('initialsMsg'), '');
   $('initialsOverlay').classList.remove('hidden');
   document.querySelector('.initial-box').focus();
@@ -1213,15 +1545,27 @@ async function saveInitials() {
   if (!initials) return say($('initialsMsg'), 'Enter at least one letter.', 'err');
 
   const target = scoreTarget();
+  // profileId is who banks the badge; playerId is which player of the round
+  // the score belongs to. They are only the same thing by coincidence.
+  const profileId = S.player ? S.player.id : undefined;
   const body = S.mode === 'room'
-    ? { ...S.creds, initials }
-    : { boardId: S.boardId, playerId: target.playerId, mode: S.mode, durationSec: S.duration, initials };
+    ? { ...S.creds, initials, profileId }
+    : { boardId: S.boardId, playerId: target.playerId, mode: S.mode, durationSec: S.duration, initials, profileId };
 
   try {
     const saved = await api('/leaderboard', { method: 'POST', body });
-    say($('initialsMsg'), `Saved — rank #${saved.rank}.`, 'ok');
+    if (!saved.made) {
+      say($('initialsMsg'), `Somebody beat you to it — ${saved.shortBy} short now.`, 'err');
+      return;
+    }
+    const bumped = (saved.evicted || [])[0];
+    say($('initialsMsg'),
+      bumped ? `Number ${saved.rank}. You knocked ${bumped.initials} off.` : `Number ${saved.rank}.`,
+      'ok');
+    Sound.fanfare();
+    Fx.burst({ count: 120, coins: 18 });
     $('saveScoreBtn').classList.add('hidden');
-    setTimeout(() => $('initialsOverlay').classList.add('hidden'), 900);
+    setTimeout(() => $('initialsOverlay').classList.add('hidden'), 1400);
   } catch (e) {
     say($('initialsMsg'), e.message, 'err');
   }
@@ -1309,6 +1653,24 @@ function bind() {
   $('leaderboardBtn').onclick = openLeaderboard;
   $('closeLeaderboardBtn').onclick = () => $('leaderboardOverlay').classList.add('hidden');
 
+  // ---- profiles ----
+  $('profileBtn').onclick = () => { Sound.arm(); openProfileDetail(); };
+  $('whoGuestBtn').onclick = () => { setProfile(null); screen('setup'); renderSetup(); };
+  $('closeNewProfileBtn').onclick = () => $('newProfileOverlay').classList.add('hidden');
+  $('saveProfileBtn').onclick = saveProfile;
+  $('deleteProfileBtn').onclick = removeProfile;
+  $('profileNameInput').addEventListener('keydown', e => { if (e.key === 'Enter') saveProfile(); });
+  $('closeProfileDetailBtn').onclick = () => $('profileDetailOverlay').classList.add('hidden');
+  $('pdEditBtn').onclick = () => {
+    $('profileDetailOverlay').classList.add('hidden');
+    openProfileEditor(S.player);
+  };
+  $('pdSwitchBtn').onclick = () => {
+    $('profileDetailOverlay').classList.add('hidden');
+    showProfilePicker();
+  };
+  $('hintBtn').onclick = classicHint;
+
   // ---- marathon ----
   const maraSubmit = () => {
     const v = $('maraInput').value;
@@ -1383,7 +1745,14 @@ async function boot() {
   S.difficulty = S.config.defaultDifficulty || 'normal';
   S.players = defaultPlayers(2);
   bind();
+  S.season = S.config.season || null;
+  await loadProfiles();
+  renderSeasonStrip();
   renderSetup();
+
+  // First visit with profiles already on the server and none chosen: ask who
+  // is playing rather than silently banking nothing.
+  if (!S.player && S.players.length) showProfilePicker();
 }
 
 boot();

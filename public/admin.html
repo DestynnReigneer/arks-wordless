@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wordless Admin</title>
+<title>Arcade Admin</title>
 <link rel="stylesheet" href="style.css">
 <style>
   body { align-items: stretch; }
@@ -18,6 +18,57 @@
     margin-bottom: 20px;
   }
   .admin-section h2 { margin: 0 0 12px; font-size: 15px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+  .tabs button {
+    flex: 1; padding: 10px; border-radius: 9px; cursor: pointer;
+    background: #171922; border: 1px solid #2a2d38; color: var(--text);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+  }
+  .tabs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+  .row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 11px;
+    border: 1px solid var(--tile-border); border-radius: 8px; margin-bottom: 7px;
+    font-size: 13px;
+  }
+  .row .grow { flex: 1; min-width: 0; }
+  .row .muted { font-size: 11px; opacity: 0.55; }
+  .row .num { font-variant-numeric: tabular-nums; opacity: 0.75; font-size: 12px; }
+  .row button {
+    background: var(--key-bg); border: 1px solid var(--tile-border); color: var(--text);
+    border-radius: 6px; padding: 5px 9px; font-size: 11.5px; cursor: pointer;
+  }
+  .row button.danger { border-color: #7a2a2a; color: #ff9a9a; }
+  .row button:hover { background: var(--key-hover); }
+
+  .season-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  .season-head b { font-size: 19px; }
+  .season-head .pill {
+    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    border: 1px solid var(--accent); color: var(--accent); border-radius: 20px; padding: 3px 9px;
+  }
+  .season-head .pill.soon { border-color: #ffb454; color: #ffb454; }
+  .field-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 12px; }
+  .field-row label { font-size: 11px; opacity: 0.6; display: block; margin-bottom: 4px; }
+  .field-row input, .field-row select {
+    background: #10121a; border: 1px solid var(--tile-border); color: var(--text);
+    border-radius: 7px; padding: 8px 9px; font-family: inherit; font-size: 13px;
+  }
+  .field-row input[type="number"] { width: 74px; }
+  .board-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .board-tabs button {
+    padding: 7px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
+    background: #10121a; border: 1px solid var(--tile-border); color: var(--text); font-family: inherit;
+  }
+  .board-tabs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  .badge-chip {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
+    border: 1px solid var(--tile-border); border-radius: 20px; padding: 3px 9px; margin: 0 5px 5px 0;
+  }
+  .badge-chip.gold { border-color: #d4a02a; color: #ffd76a; }
+  .danger-zone { border-color: #4a2020; }
+  .danger-zone h2 { color: #ff9a9a; }
   .req-card {
     border: 1px solid var(--tile-border);
     border-radius: 8px;
@@ -80,7 +131,7 @@
 <body>
 <main>
   <div class="admin-header">
-    <h1>🛠️ Wordless Admin</h1>
+    <h1>🛠️ Arcade Admin</h1>
     <div style="opacity:0.5; font-size:12px;">Theme requests · theme management</div>
   </div>
 
@@ -92,6 +143,81 @@
   </div>
 
   <div id="adminContent" class="hidden">
+
+  <div class="tabs">
+    <button id="tabRambler" aria-pressed="true">🎲 Rambler</button>
+    <button id="tabWordless" aria-pressed="false">🔤 Wordless</button>
+  </div>
+
+  <div id="ramblerPanel">
+    <div class="admin-section">
+      <h2>🏆 Season</h2>
+      <div id="seasonBox">Loading…</div>
+
+      <div class="field-row">
+        <div>
+          <label for="intervalUnit">Reset</label>
+          <select id="intervalUnit">
+            <option value="days">every N days</option>
+            <option value="weeks">every N weeks</option>
+            <option value="months">every N months</option>
+            <option value="manual">only when I say</option>
+          </select>
+        </div>
+        <div>
+          <label for="intervalEvery">N</label>
+          <input type="number" id="intervalEvery" min="1" max="52" value="1">
+        </div>
+        <div>
+          <label for="warnDays">Warn (days)</label>
+          <input type="number" id="warnDays" min="0" max="60" value="7">
+        </div>
+        <button class="small-btn" id="saveSchedule">Save schedule</button>
+      </div>
+
+      <div class="field-row">
+        <div class="grow">
+          <label for="seasonName">Season name (optional)</label>
+          <input type="text" id="seasonName" maxlength="40" placeholder="e.g. Spooky Season" style="width:100%">
+        </div>
+        <button class="small-btn" id="saveSeasonName">Rename</button>
+      </div>
+      <div id="seasonMsg" class="admin-msg"></div>
+    </div>
+
+    <div class="admin-section">
+      <h2>📋 Arcade boards</h2>
+      <div class="board-tabs" id="boardTabs"></div>
+      <div id="boardList"></div>
+      <div class="field-row">
+        <button class="small-btn" id="clearBoardBtn">Clear this board</button>
+      </div>
+      <div id="boardMsg" class="admin-msg"></div>
+    </div>
+
+    <div class="admin-section">
+      <h2>👥 Profiles</h2>
+      <div id="playerList"></div>
+      <div id="playerMsg" class="admin-msg"></div>
+    </div>
+
+    <div class="admin-section">
+      <h2>🎖️ Hall of fame</h2>
+      <div id="hallOfFame"></div>
+    </div>
+
+    <div class="admin-section danger-zone">
+      <h2>⚠️ End the season now</h2>
+      <p class="note" style="font-size:12px;opacity:.7;line-height:1.6;margin:0 0 12px">
+        Freezes every board into badges, then clears all three. Streaks, coins,
+        milestones and personal bests are untouched — only the walls reset.
+      </p>
+      <button class="small-btn" id="endSeasonBtn">End season and start the next</button>
+      <div id="endMsg" class="admin-msg"></div>
+    </div>
+  </div>
+
+  <div id="wordlessPanel" class="hidden">
     <div class="admin-section">
       <h2>💬 Pending Theme Requests</h2>
       <div id="requestsList"></div>
@@ -113,6 +239,9 @@
     <button id="lockBtn" class="small-btn" style="margin-top:10px;">🔒 Lock admin panel</button>
   </div>
 </main>
+  </div>
+
 <script src="admin.js"></script>
+<script src="admin-rambler.js"></script>
 </body>
 </html>

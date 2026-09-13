@@ -4,7 +4,14 @@ const { DatabaseSync } = require('node:sqlite');
 
 const DATA_DIR = path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new DatabaseSync(path.join(DATA_DIR, 'wordless.db'));
+
+// Tests get their own database file. Sharing one with the running app made the
+// suite non-idempotent -- a second run inherited a full arcade board from the
+// first and behaved differently, which is exactly the kind of flake that
+// teaches people to ignore red builds.
+const DB_FILE = process.env.RAMBLER_DB
+  || (process.env.NODE_ENV === 'test' ? 'test.db' : 'wordless.db');
+const db = new DatabaseSync(path.join(DATA_DIR, DB_FILE));
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS themes (
@@ -75,6 +82,44 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_rambler_daily_day ON rambler_daily (day, score DESC);
 
+  -- A season is a run of the arcade board. When one ends the walls clear, but
+  -- everything personal -- streaks, coins, milestones, lifetime bests --
+  -- carries straight over. Only the walls reset.
+  CREATE TABLE IF NOT EXISTS seasons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year INTEGER NOT NULL,
+    number INTEGER NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    theme_id TEXT,
+    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+    ends_at TEXT,
+    ended_at TEXT
+  );
+
+  -- What somebody took home from a season. Written once, when the season
+  -- closes, from whatever was standing on the boards at that moment.
+  CREATE TABLE IF NOT EXISTS season_badges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    season_id INTEGER NOT NULL,
+    player_id TEXT,
+    initials TEXT NOT NULL,
+    board_key TEXT NOT NULL,
+    rank INTEGER NOT NULL,
+    score INTEGER NOT NULL,
+    word_count INTEGER NOT NULL DEFAULT 0,
+    best_word TEXT NOT NULL DEFAULT '',
+    earned_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_badges_player ON season_badges (player_id, season_id);
+
+  -- Small key/value store for things the admin can change without a redeploy.
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS rambler_scores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     initials TEXT NOT NULL,
@@ -104,6 +149,36 @@ db.exec(`
     fulfilled_at TEXT
   );
 `);
+
+// ---- migrations ----
+// CREATE TABLE IF NOT EXISTS will not add a column to a table that already
+// exists, so anything added after the first release needs doing by hand.
+function ensureColumn(table, column, declaration) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+  if (cols.includes(column)) return false;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
+  return true;
+}
+
+// The arcade board is partitioned by shape of game, not by dictionary: 4x4,
+// 5x5 and Marathon. The two dictionaries differ by about 300 words in 172,000,
+// which is a fraction of a word per board -- not enough to justify splitting
+// the wall in half and leaving both halves empty.
+if (ensureColumn('rambler_scores', 'board_key', "TEXT NOT NULL DEFAULT ''")) {
+  db.prepare(`
+    UPDATE rambler_scores
+    SET board_key = CASE WHEN mode = 'marathon' THEN 'marathon' ELSE CAST(board_size AS TEXT) END
+  `).run();
+}
+db.exec(`CREATE INDEX IF NOT EXISTS idx_arcade_board ON rambler_scores (board_key, score DESC);`);
+
+// Which profile was playing when a score went up. Without it a season badge
+// has nowhere to land -- the board only ever knew the three letters someone
+// typed, not whose account they were on.
+ensureColumn('rambler_scores', 'player_id', 'TEXT');
+
+// Which season a score belongs to, so a board can be rebuilt after the fact.
+ensureColumn('rambler_scores', 'season_id', 'INTEGER');
 
 const FONT_STACKS = {
   sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -391,6 +466,283 @@ function listRamblerLeaderboard({ profile, boardSize, mode, limit }) {
   }));
 }
 
+// ---- settings ----
+// Deliberately a key/value table rather than columns: the admin page adds
+// knobs faster than a schema should change, and none of these are queried.
+
+function getSetting(key, fallback = null) {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  if (!row) return fallback;
+  try {
+    return JSON.parse(row.value);
+  } catch {
+    return row.value;
+  }
+}
+
+function setSetting(key, value) {
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+  `).run(key, JSON.stringify(value));
+  return value;
+}
+
+function allSettings() {
+  const out = {};
+  for (const r of db.prepare('SELECT key, value FROM settings').all()) {
+    try {
+      out[r.key] = JSON.parse(r.value);
+    } catch {
+      out[r.key] = r.value;
+    }
+  }
+  return out;
+}
+
+// ---- seasons ----
+
+function rowToSeason(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    year: r.year,
+    number: r.number,
+    name: r.name,
+    themeId: r.theme_id,
+    startedAt: r.started_at,
+    endsAt: r.ends_at,
+    endedAt: r.ended_at,
+    label: r.name || `${r.year} Season ${r.number}`
+  };
+}
+
+function currentSeason() {
+  return rowToSeason(
+    db.prepare('SELECT * FROM seasons WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1').get()
+  );
+}
+
+function listSeasons(limit = 24) {
+  return db.prepare('SELECT * FROM seasons ORDER BY id DESC LIMIT ?').all(limit).map(rowToSeason);
+}
+
+function getSeason(id) {
+  return rowToSeason(db.prepare('SELECT * FROM seasons WHERE id = ?').get(id));
+}
+
+function startSeason({ endsAt = null, name = '', themeId = null } = {}) {
+  const year = new Date().getFullYear();
+  const last = db.prepare('SELECT MAX(number) AS n FROM seasons WHERE year = ?').get(year);
+  const number = (last && last.n ? last.n : 0) + 1;
+  const info = db.prepare(`
+    INSERT INTO seasons (year, number, name, theme_id, ends_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(year, number, name || '', themeId, endsAt);
+  return getSeason(info.lastInsertRowid);
+}
+
+function updateSeason(id, { endsAt, name, themeId }) {
+  const season = getSeason(id);
+  if (!season) return null;
+  db.prepare('UPDATE seasons SET ends_at = ?, name = ?, theme_id = ? WHERE id = ?').run(
+    endsAt === undefined ? season.endsAt : endsAt,
+    name === undefined ? season.name : name,
+    themeId === undefined ? season.themeId : themeId,
+    id
+  );
+  return getSeason(id);
+}
+
+// Freezes the boards into badges, then wipes them. Everything personal is
+// untouched on purpose: a streak that survived a month should survive the
+// month ending.
+function closeSeason(seasonId, boards) {
+  const season = getSeason(seasonId);
+  if (!season || season.endedAt) return null;
+
+  const minted = [];
+  for (const key of boards) {
+    const rows = db.prepare(`
+      SELECT * FROM rambler_scores WHERE board_key = ?
+      ORDER BY score DESC, created_at ASC LIMIT ?
+    `).all(key, ARCADE_SLOTS);
+
+    rows.forEach((r, i) => {
+      db.prepare(`
+        INSERT INTO season_badges
+          (season_id, player_id, initials, board_key, rank, score, word_count, best_word)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(seasonId, r.player_id || null, r.initials, key, i + 1, r.score, r.word_count, r.best_word || '');
+      minted.push({ initials: r.initials, boardKey: key, rank: i + 1, score: r.score });
+    });
+  }
+
+  db.prepare('DELETE FROM rambler_scores').run();
+  db.prepare("UPDATE seasons SET ended_at = datetime('now') WHERE id = ?").run(seasonId);
+  return { season: getSeason(seasonId), minted };
+}
+
+function badgesForPlayer(playerId) {
+  return db.prepare(`
+    SELECT b.*, s.year, s.number, s.name
+    FROM season_badges b JOIN seasons s ON s.id = b.season_id
+    WHERE b.player_id = ?
+    ORDER BY b.season_id DESC, b.rank ASC
+  `).all(playerId).map(r => ({
+    seasonId: r.season_id,
+    seasonLabel: r.name || `${r.year} Season ${r.number}`,
+    year: r.year,
+    number: r.number,
+    initials: r.initials,
+    boardKey: r.board_key,
+    rank: r.rank,
+    score: r.score,
+    wordCount: r.word_count,
+    bestWord: r.best_word
+  }));
+}
+
+function badgesForSeason(seasonId) {
+  return db.prepare(`
+    SELECT * FROM season_badges WHERE season_id = ?
+    ORDER BY board_key ASC, rank ASC
+  `).all(seasonId).map(r => ({
+    playerId: r.player_id,
+    initials: r.initials,
+    boardKey: r.board_key,
+    rank: r.rank,
+    score: r.score,
+    wordCount: r.word_count,
+    bestWord: r.best_word
+  }));
+}
+
+function deleteArcadeEntry(id) {
+  return db.prepare('DELETE FROM rambler_scores WHERE id = ?').run(id).changes > 0;
+}
+
+function clearArcadeBoard(boardKey) {
+  return db.prepare('DELETE FROM rambler_scores WHERE board_key = ?').run(String(boardKey)).changes;
+}
+
+// ---- Rambler: the arcade board ----
+//
+// A real cabinet keeps ten slots and nothing else. You get to type your
+// initials only by knocking someone off, and when you do, they are gone.
+// That scarcity is the entire point -- an unbounded table that merely
+// displays its top 25 has nothing at stake.
+
+const ARCADE_SLOTS = 10;
+const ARCADE_BOARDS = ['4', '5', 'marathon'];
+
+function boardKeyFor(mode, boardSize) {
+  if (mode === 'marathon') return 'marathon';
+  return String(boardSize) === '5' ? '5' : '4';
+}
+
+function rowToArcade(r) {
+  return {
+    id: r.id,
+    initials: r.initials,
+    score: r.score,
+    mode: r.mode,
+    boardKey: r.board_key,
+    boardSize: r.board_size,
+    profile: r.profile,
+    playerId: r.player_id,
+    wordCount: r.word_count,
+    bestWord: r.best_word,
+    longestWord: r.longest_word,
+    durationSec: r.duration_sec,
+    players: r.players,
+    createdAt: r.created_at
+  };
+}
+
+function listArcadeBoard(boardKey, limit = ARCADE_SLOTS) {
+  const cap = Math.min(Math.max(parseInt(limit, 10) || ARCADE_SLOTS, 1), ARCADE_SLOTS);
+  return db.prepare(`
+    SELECT * FROM rambler_scores
+    WHERE board_key = ?
+    ORDER BY score DESC, created_at ASC
+    LIMIT ?
+  `).all(String(boardKey), cap).map(rowToArcade);
+}
+
+// Where a score would place, and whether that is good enough to get on.
+// Ties go to whoever got there first, exactly like a cabinet: you have to
+// beat the tenth score, not match it.
+function arcadeStanding(boardKey, score) {
+  const key = String(boardKey);
+  const filled = db.prepare('SELECT COUNT(*) AS c FROM rambler_scores WHERE board_key = ?').get(key).c;
+  const better = db.prepare(
+    'SELECT COUNT(*) AS c FROM rambler_scores WHERE board_key = ? AND score >= ?'
+  ).get(key, score).c;
+
+  const rank = better + 1;
+  const lowest = db.prepare(`
+    SELECT score FROM rambler_scores WHERE board_key = ?
+    ORDER BY score DESC, created_at ASC LIMIT 1 OFFSET ?
+  `).get(key, ARCADE_SLOTS - 1);
+  const cutoff = lowest ? lowest.score : 0;
+
+  return {
+    boardKey: key,
+    rank,
+    filled,
+    slots: ARCADE_SLOTS,
+    cutoff,
+    makesBoard: score > 0 && (filled < ARCADE_SLOTS || score > cutoff),
+    shortBy: filled < ARCADE_SLOTS ? 0 : Math.max(0, cutoff - score + 1)
+  };
+}
+
+// Inserts, then trims the board back to its ten slots. Returns who fell off,
+// because "you knocked ROB off the board" is the whole feeling.
+function insertArcadeScore(entry) {
+  const boardKey = boardKeyFor(entry.mode, entry.boardSize);
+  const standing = arcadeStanding(boardKey, entry.score);
+  // Report the score either way: the caller asked what happened to *this*
+  // score, and omitting it on a miss makes the answer harder to use.
+  if (!standing.makesBoard) return { made: false, score: entry.score, ...standing };
+
+  const season = currentSeason();
+  const info = db.prepare(`
+    INSERT INTO rambler_scores
+      (initials, score, mode, board_size, board_key, profile, word_count,
+       best_word, longest_word, duration_sec, players, player_id, season_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    entry.initials, entry.score, entry.mode, entry.boardSize, boardKey,
+    entry.profile, entry.wordCount, entry.bestWord || '', entry.longestWord || '',
+    entry.durationSec, entry.players || 1,
+    entry.playerId || null, season ? season.id : null
+  );
+
+  const evicted = db.prepare(`
+    SELECT * FROM rambler_scores WHERE board_key = ?
+    ORDER BY score DESC, created_at ASC LIMIT -1 OFFSET ?
+  `).all(boardKey, ARCADE_SLOTS).map(rowToArcade);
+
+  for (const row of evicted) {
+    db.prepare('DELETE FROM rambler_scores WHERE id = ?').run(row.id);
+  }
+
+  return {
+    made: true,
+    id: info.lastInsertRowid,
+    score: entry.score,
+    boardKey,
+    // The standing taken *before* the insert is already the slot this entry
+    // lands in -- it counted everything scoring at least as much, and ties go
+    // to the incumbent. Re-querying afterwards counts this row itself and
+    // reports one place too low.
+    rank: standing.rank,
+    evicted: evicted.map(e => ({ initials: e.initials, score: e.score }))
+  };
+}
+
 // ---- Rambler: players, streaks, dailies, milestones ----
 
 function rowToPlayer(r) {
@@ -520,6 +872,25 @@ module.exports = {
   fulfillThemeRequest,
   insertRamblerScore,
   listRamblerLeaderboard,
+  ARCADE_SLOTS,
+  ARCADE_BOARDS,
+  getSetting,
+  setSetting,
+  allSettings,
+  currentSeason,
+  listSeasons,
+  getSeason,
+  startSeason,
+  updateSeason,
+  closeSeason,
+  badgesForPlayer,
+  badgesForSeason,
+  deleteArcadeEntry,
+  clearArcadeBoard,
+  boardKeyFor,
+  listArcadeBoard,
+  arcadeStanding,
+  insertArcadeScore,
   listPlayers,
   getPlayer,
   createPlayer,

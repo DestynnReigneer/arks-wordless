@@ -12,8 +12,11 @@ const { solve } = require('./solver');
 const rooms = require('./rooms');
 const marathon = require('./marathon');
 const progress = require('./progress');
+const seasons = require('./seasons');
+const adminRouter = require('./admin');
 
 const router = express.Router();
+router.use('/admin', adminRouter);
 
 // Optional extra lock on the unfiltered dictionary. Unset -- the default --
 // means a confirmation tap is all that stands in front of it, which is what
@@ -39,6 +42,17 @@ function assertProfileAllowed(profile, req) {
   if (String(supplied) !== ADULT_PIN) {
     throw fail('That PIN is not right.', 403);
   }
+}
+
+// The two dictionaries share a board, so an adult round could put a rude word
+// on a wall the kids read. The score still counts -- only the word is withheld.
+function publicEntry(row) {
+  const clean = row.bestWord && dictionary.isWord(row.bestWord, 'kids');
+  return { ...row, bestWord: clean ? row.bestWord : '', profile: undefined };
+}
+
+function boardLabel(key) {
+  return key === 'marathon' ? 'Marathon' : key === '5' ? '5x5 Big' : '4x4 Classic';
 }
 
 function solverSolve(board, spec, profile, min) {
@@ -78,6 +92,7 @@ router.get('/config', (req, res) => {
     marathon: { start: marathon.START, timeBonus: marathon.TIME_BONUS },
     milestones: progress.catalogue(),
     today: progress.today(),
+    season: seasons.status(),
     profiles: dictionary.listProfiles(),
     adultRequiresPin: !!ADULT_PIN,
     maxPlayers: rooms.MAX_PLAYERS,
@@ -171,10 +186,15 @@ router.post('/score', scoreLimiter, (req, res, next) => {
 
     // If a profile was playing, this is where the streak, coins and
     // milestones move. Guests can still play; they just bank nothing.
-    if (body.playerId && db.getPlayer(body.playerId)) {
+    //
+    // `profileId` is the field; `playerId` is accepted as a fallback only
+    // because an earlier version used it, and it means something different
+    // everywhere else (which player of the round, or which room member).
+    const profileId = body.profileId || body.playerId;
+    if (profileId && db.getPlayer(profileId)) {
       const mine = result.results.find(r => r.playerId === (body.forPlayer || players[0].id))
         || result.results[0];
-      result.progress = progress.recordRound(body.playerId, {
+      result.progress = progress.recordRound(profileId, {
         score: mine.score,
         wordCount: mine.wordCount,
         longestWord: mine.longest || '',
@@ -184,21 +204,61 @@ router.post('/score', scoreLimiter, (req, res, next) => {
       });
     }
 
+    // What the arcade board makes of it, so the client knows whether to offer
+    // the initials prompt or show the player how far off they were.
+    const top = result.results[0];
+    if (top) {
+      result.arcade = db.arcadeStanding(db.boardKeyFor('solo', entry.size), top.score);
+      result.arcade.entries = db.listArcadeBoard(result.arcade.boardKey).map(publicEntry);
+    }
+
     res.json(result);
   } catch (e) {
     next(e);
   }
 });
 
+// ---- seasons ---------------------------------------------------------------
+
+// The countdown, and whatever the asking profile has won before.
+router.get('/season', (req, res) => {
+  seasons.checkDue();
+  const status = seasons.status();
+  const playerId = String(req.query.playerId || '');
+  res.json({
+    ...status,
+    badges: playerId ? db.badgesForPlayer(playerId) : [],
+    past: db.listSeasons(8).filter(s => s.endedAt).map(s => ({
+      ...s,
+      winners: db.badgesForSeason(s.id).filter(b => b.rank === 1)
+    }))
+  });
+});
+
+// ---- the arcade board ------------------------------------------------------
+
+// Ten slots per board, and you only get on by beating the tenth score.
+router.get('/arcade', (req, res) => {
+  seasons.checkDue();
+  const key = db.ARCADE_BOARDS.includes(String(req.query.board)) ? String(req.query.board) : '4';
+  const entries = db.listArcadeBoard(key).map(publicEntry);
+  res.json({
+    boardKey: key,
+    label: boardLabel(key),
+    slots: db.ARCADE_SLOTS,
+    filled: entries.length,
+    entries,
+    boards: db.ARCADE_BOARDS.map(k => ({ key: k, label: boardLabel(k) }))
+  });
+});
+
 // ---- leaderboard -----------------------------------------------------------
 
 router.get('/leaderboard', (req, res) => {
-  res.json(db.listRamblerLeaderboard({
-    profile: profileOf(req.query.profile),
-    boardSize: round.SIZES.includes(Number(req.query.size)) ? Number(req.query.size) : 4,
-    mode: req.query.mode === 'marathon' ? 'marathon' : null,
-    limit: req.query.limit
-  }));
+  const key = req.query.mode === 'marathon'
+    ? 'marathon'
+    : db.boardKeyFor('solo', req.query.size);
+  res.json(db.listArcadeBoard(key, req.query.limit).map(publicEntry));
 });
 
 // The score is never taken from the request body. It is looked up from the
@@ -210,6 +270,9 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
     if (!INITIALS_RE.test(initials)) {
       throw fail('Initials must be 1-3 letters or numbers.', 400);
     }
+    // Roll the season over first, so a score submitted a minute after
+    // midnight lands on the new board rather than the one being frozen.
+    seasons.checkDue();
 
     let result;
     let playerId;
@@ -220,8 +283,9 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
     // scored, exactly like every other mode -- never off the request.
     if (body.marathonId) {
       const done = marathon.finish(body.marathonId);
-      const saved = db.insertRamblerScore({
+      const saved = db.insertArcadeScore({
         initials,
+        playerId: body.profileId && db.getPlayer(body.profileId) ? body.profileId : null,
         score: done.finalScore,
         mode: 'marathon',
         boardSize: 4,
@@ -232,7 +296,7 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
         durationSec: Math.round(done.survivedMs / 1000),
         players: 1
       });
-      return res.status(201).json(saved);
+      return res.status(saved.made ? 201 : 200).json(saved);
     }
 
     if (body.code) {
@@ -255,8 +319,11 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
     const player = result.results.find(r => r.playerId === playerId);
     if (!player) throw fail('Unknown player for that round.', 400);
 
-    const saved = db.insertRamblerScore({
+    const saved = db.insertArcadeScore({
       initials,
+      // `playerId` above identifies the player *within the round*; the profile
+      // that banks the badge is a separate thing and has its own field.
+      playerId: body.profileId && db.getPlayer(body.profileId) ? body.profileId : null,
       score: player.score,
       mode,
       boardSize: result.size,
@@ -267,7 +334,8 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
       durationSec,
       players: result.results.length
     });
-    res.status(201).json(saved);
+    // Missing the board is not an error -- it is the answer to the question.
+    res.status(saved.made ? 201 : 200).json(saved);
   } catch (e) {
     next(e);
   }
@@ -470,8 +538,9 @@ router.post('/marathon/:id/finish', scoreLimiter, (req, res, next) => {
     const body = req.body || {};
     const result = marathon.finish(req.params.id);
 
-    if (body.playerId && db.getPlayer(body.playerId)) {
-      result.progress = progress.recordRound(body.playerId, {
+    const finishProfile = body.profileId || body.playerId;
+    if (finishProfile && db.getPlayer(finishProfile)) {
+      result.progress = progress.recordRound(finishProfile, {
         score: result.finalScore,
         wordCount: result.wordCount,
         longestWord: result.longest,
@@ -480,6 +549,10 @@ router.post('/marathon/:id/finish', scoreLimiter, (req, res, next) => {
         marathonLevel: result.level
       });
     }
+
+    result.arcade = db.arcadeStanding('marathon', result.finalScore);
+    result.arcade.entries = db.listArcadeBoard('marathon').map(publicEntry);
+
     res.json(result);
   } catch (e) {
     next(e);

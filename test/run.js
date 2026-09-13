@@ -9,6 +9,8 @@
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
+const fs = require('node:fs');
+
 const PORT = process.env.TEST_PORT || 3222;
 const BASE = `http://localhost:${PORT}`;
 const ROOT = path.join(__dirname, '..');
@@ -22,7 +24,14 @@ function startServer() {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['server.js'], {
       cwd: ROOT,
-      env: { ...process.env, PORT: String(PORT), NODE_ENV: 'test' },
+      env: {
+        ...process.env,
+        PORT: String(PORT),
+        NODE_ENV: 'test',
+        // Admin routes are deny-by-default, so the suite has to supply a
+        // token to be able to prove they are locked *and* that they work.
+        ADMIN_TOKEN: 'test-admin-token'
+      },
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -50,8 +59,18 @@ async function waitForHealth() {
   throw new Error('server never became healthy');
 }
 
+// Wipe the test database before every run so results never depend on what a
+// previous run left behind.
+function resetTestDb() {
+  const dir = path.join(ROOT, 'data');
+  for (const f of ['test.db', 'test.db-journal', 'test.db-wal', 'test.db-shm']) {
+    try { fs.unlinkSync(path.join(dir, f)); } catch { /* not there */ }
+  }
+}
+
 (async () => {
   let server = null;
+  resetTestDb();
   let total = 0;
   let failed = 0;
 
