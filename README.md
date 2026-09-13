@@ -42,7 +42,9 @@ Because of Marathon, boards are rectangular internally. Anything that takes a bo
 
 - **Profiles** — one per person, with an avatar, picked from a "Who's playing?" screen. Not accounts: no password, no email.
 - **Streaks** — play on consecutive days and it climbs. Rolls over at *local* midnight, which is why `TZ` matters in the compose file.
-- **Daily challenge** — one board a day, the same for everyone in the house, generated from the date rather than stored. One attempt each, and a standings table. Because it comes from the date, it is reproducible anywhere and survives losing the database entirely.
+- **Daily challenge** — one board a day, the same sixteen letters for everyone in the house, generated from the date rather than stored. Four minutes, fixed, so the standings mean something. One *scoring* go each: you can replay it as often as you like and nothing more is banked, which beats telling a seven-year-old no. Because it comes from the date, it is reproducible anywhere and survives losing the database entirely.
+
+  The dictionary is the one thing that is not shared — the unfiltered list is wider, so an adult genuinely has more to find. The standings tag each row with the list it was played on rather than pretending the two are the same.
 - **Milestones** — sixteen of them, from "find your first word" to "play thirty days running". Each pays coins.
 - **Theme packs** — a pack of words about a subject (Halloween, Minecraft, whatever) that a season can wear. Its words become **valid** so `ENDERMAN` scores, they are **flagged** so finding one fires a celebration and pays **double**, boards are **re-rolled** until they actually contain some, and the accent colour changes to match. Written by pasting a generated prompt into any chatbot and pasting the answer back — no API key, no cost.
 - **Seasons** — the arcade boards run on a schedule you set (monthly by default, or any interval, or manual). When a season ends every board is frozen into **badges** and then cleared, so everyone starts level. A badge records the year, season, which board, the rank and the score. Streaks, coins, milestones and lifetime bests are **never** reset — only the walls are. Players get a countdown in the last few days.
@@ -63,14 +65,13 @@ Because of Marathon, boards are rectangular internally. Anything that takes a bo
 | Theme packs | done | done |
 | Dictionary editing from the browser | done | done |
 | Admin: seasons, moderation, profiles | done | done |
-| Daily challenge | done | **not built** |
+| Daily challenge | done | done |
 
-The daily challenge is the last one without a screen. `GET /daily` returns the
-board and the standings; nothing calls it yet.
+Every feature now has a screen.
 
-The classic modes are also still off the ARKS colour spec — Marathon and the
-profile screens were built to it, the four original modes were not.
-`docs/DESIGN.md` lists exactly which values are wrong.
+What is still outstanding is the classic modes being off the ARKS colour spec
+— Marathon, the daily and the profile screens were built to it, the four
+original modes were not. `docs/DESIGN.md` lists exactly which values are wrong.
 
 #### A note on theme packs and word length
 

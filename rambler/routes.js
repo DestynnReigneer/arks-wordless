@@ -204,8 +204,22 @@ router.post('/score', scoreLimiter, (req, res, next) => {
         longestWord: mine.longest || '',
         bestWord: mine.best ? mine.best.word : '',
         daily: !!entry.daily,
-        day: entry.daily || progress.today()
+        day: entry.daily || progress.today(),
+        profile: entry.profile
       });
+    }
+
+    // The daily's own board: who in the house is where, once this round has
+    // been filed. Sent with the result so the screen can show the standing
+    // without a second request and a visible flicker.
+    if (entry.daily) {
+      const standings = db.listDaily(entry.daily);
+      result.daily = {
+        day: entry.daily,
+        counted: !!(result.progress && result.progress.dailyCounted),
+        standings,
+        you: profileId ? standings.find(r => r.playerId === profileId) || null : null
+      };
     }
 
     // What the arcade board makes of it, so the client knows whether to offer
@@ -566,11 +580,23 @@ router.post('/marathon/:id/finish', scoreLimiter, (req, res, next) => {
 
 // ---- daily challenge --------------------------------------------------------
 
+// Local midnight, matching progress.today(): the day rolls over when the
+// house goes to bed, not when UTC decides.
+function nextMidnight(now = new Date()) {
+  const d = new Date(now);
+  d.setHours(24, 0, 0, 0);
+  return d;
+}
+
 // One board a day for the whole house, generated from the date rather than
 // stored — so it is reproducible anywhere and survives losing the database.
 router.get('/daily', (req, res, next) => {
   try {
     const profile = profileOf(req.query.profile);
+    // A GET that hands back an unfiltered board is still a way to reach
+    // unfiltered words, so it is gated like every other one. The PIN travels
+    // in a header here because there is no body to put it in.
+    assertProfileAllowed(profile, req);
     const day = progress.today();
     const built = progress.dailyBoard(day, profile);
     const entry = boards.stash({ ...built, daily: day });
@@ -587,6 +613,12 @@ router.get('/daily', (req, res, next) => {
       profile: entry.profile,
       difficulty: entry.difficulty,
       minLength: entry.minLength,
+      // Fixed for everyone. The client does not get to pick this one.
+      durationSec: progress.DAILY_DURATION,
+      totalWords: built.totalWords,
+      // When the board turns over, so the screen can count down to it rather
+      // than leaving people guessing what "tomorrow" means.
+      resetsAt: nextMidnight().toISOString(),
       alreadyPlayed: !!already,
       yourResult: already,
       standings: db.listDaily(day)
