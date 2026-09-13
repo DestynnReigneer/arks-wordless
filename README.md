@@ -29,6 +29,52 @@ A dice-and-grid word hunt against the clock. (Boggle-style — "Boggle" is a Has
   - **Tabletop** — one shared timer, everyone writes on paper, then the lists get typed in for scoring. The phone is just the buzzer and the scorekeeper.
   - **Own Phones** — a four-letter room code, everyone on their own device, synchronised timer, live word counts (counts only — never the words).
 - Two dictionaries: a **Kids** list with the rude words removed, and an **Unfiltered** list with slang and profanity added on top. Separate leaderboards, so the two never share a scale.
+- **Difficulty** — Easy (three-letter words count, roomier timer, richer boards), Normal (the box rules), Hard (four letters minimum, less time, scores multiplied by 1.35).
+- **Timers up to ten minutes.** Three is the box rule and it is genuinely miserable for a seven-year-old.
+
+#### Marathon
+
+The mode that isn't in the box. You start on a small board with a short clock, and **every word you find buys you more time** — three seconds for a short one, twenty-five for an eight-letter monster. Find enough and **the grid grows a row or column** on a random side, opening letters that weren't reachable a moment ago. You never win; you last.
+
+Because of Marathon, boards are rectangular internally. Anything that takes a board accepts `{ cols, rows }`, and a plain number still means a square.
+
+#### Gamification
+
+- **Profiles** — one per person, with an avatar. Not accounts: no password, no email.
+- **Streaks** — play on consecutive days and it climbs. Rolls over at *local* midnight, which is why `TZ` matters in the compose file.
+- **Daily challenge** — one board a day, the same for everyone in the house, generated from the date rather than stored. One attempt each, and a standings table. Because it comes from the date, it is reproducible anywhere and survives losing the database entirely.
+- **Milestones** — sixteen of them, from "find your first word" to "play thirty days running". Each pays coins.
+- **Coins and hints** — earned slowly, spent on a hint that reveals a word still sitting on the board. A hinted word buys you time but scores nothing, so coins can't be converted straight into points.
+
+### Not finished yet
+
+The server side of Marathon, profiles, streaks, dailies, milestones, coins and hints is **complete and tested** — every one of those is exercised by `npm test`. What is *not* built is the browser UI for them: the game page still only offers the four classic modes. The endpoints are there and documented below; the screens are the next job.
+
+| Feature | Server | UI |
+|---|---|---|
+| Solo / Pass & Play / Tabletop / Own Phones | done | done |
+| Difficulty + longer timers | done | not wired into the setup screen |
+| Marathon | done | not built |
+| Profiles / streaks / milestones / coins | done | not built |
+| Daily challenge | done | not built |
+| Hints | done | not built |
+
+#### The Word Shaker API
+
+Everything lives under `/api/shaker`.
+
+| Route | What it does |
+|---|---|
+| `GET /config` | Sizes, timers, difficulties, milestone catalogue, dictionary stats |
+| `POST /board` | Roll a board (`size`, `profile`, `difficulty`) |
+| `POST /check` | Validate one word against a board |
+| `POST /score` | Score a finished round; pass `playerId` to bank progress |
+| `POST /hint` | Spend coins to reveal a word |
+| `GET/POST /players`, `GET/PATCH/DELETE /players/:id` | Profiles |
+| `GET /daily`, `GET /daily/standings` | The daily board and its table |
+| `POST /marathon`, `POST /marathon/:id/word`, `.../hint`, `.../finish` | A Marathon run |
+| `POST /rooms`, `.../join`, `.../events`, `.../start`, `.../words`, `.../ready`, `.../next`, `.../leave` | Multi-device rooms; `events` is the SSE stream |
+| `GET/POST /leaderboard` | Scores, split by dictionary and board size |
 
 Multi-device rooms use Server-Sent Events, which are built into Node and the browser — no websocket dependency. Rooms are in-memory and vanish on restart; only finished scores are persisted.
 
@@ -61,6 +107,17 @@ npm start
 
 Then open `http://localhost:3000`.
 
+## Tests
+
+```bash
+npm test
+```
+
+Boots a server on port 3222, runs 108 checks across a unit suite (dice, board
+shapes, the solver, scoring, streaks, Marathon) and an API suite (every route,
+the event stream, the anti-cheat guarantees), then shuts it down. CI runs
+exactly this, and publishing to GHCR depends on it passing.
+
 ## Running with Docker
 
 ```bash
@@ -68,7 +125,25 @@ cp .env.example .env   # ADMIN_TOKEN (required for admin), DISCORD_WEBHOOK_URL a
 docker compose up -d --build
 ```
 
-## Deploying from a pre-built image (homelab)
+## Deploying to the homelab
+
+`docker-compose.prod.yml` in this repo is the only file the server needs — it
+pulls the image CI built rather than building anything locally:
+
+```bash
+mkdir wordless-arcade && cd wordless-arcade
+# copy docker-compose.prod.yml here as docker-compose.yml, and .env.example as .env
+docker compose pull && docker compose up -d
+docker compose ps          # STATUS should read "healthy"
+```
+
+The container runs as a non-root user, drops privileges, caps itself at 512MB
+(the dictionary trie sits around 120MB resident), and reports unhealthy if the
+word lists fail to load rather than merely if the port is open.
+
+Set `TZ` — daily challenges and streaks roll over at local midnight.
+
+## The compose file in full
 
 Once the GitHub Actions workflow (`.github/workflows/docker-publish.yml`) has published an image to GHCR, deploy anywhere with just this file — no need to clone the repo:
 
