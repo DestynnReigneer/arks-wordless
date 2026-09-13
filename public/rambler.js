@@ -15,6 +15,7 @@ const S = {
   duration: 180,
   profile: 'kids',
   difficulty: 'normal',
+  season: null,          // current season + countdown, from /config and /season
   player: null,          // the profile currently playing; null means guest
   players: [],
   avatars: [],
@@ -443,7 +444,7 @@ async function finishSingleDevice() {
         players: S.submissions,
         // Solo banks for the signed-in profile. In a shared-device game there
         // is no way to know which player is the profile, so nothing is banked.
-        playerId: S.mode === 'solo' && S.player ? S.player.id : undefined
+        profileId: S.mode === 'solo' && S.player ? S.player.id : undefined
       }
     });
     showResults(results);
@@ -625,6 +626,35 @@ async function openProfileDetail() {
     el.querySelector('span').textContent = label;
     el.querySelector('b').textContent = String(value);
     $('pdStats').appendChild(el);
+  }
+
+  // Season badges: what they took home from boards that have since cleared.
+  let badges = [];
+  try {
+    const seasonData = await api(`/season?playerId=${full.id}`);
+    badges = seasonData.badges || [];
+    S.season = seasonData;
+  } catch { badges = []; }
+
+  $('pdBadgeCount').textContent = badges.length ? String(badges.length) : '';
+  const badgeHost = $('pdBadges');
+  badgeHost.innerHTML = '';
+  if (!badges.length) {
+    badgeHost.innerHTML =
+      '<div class="note">None yet. Hold a slot on any board when a season ends and it becomes a badge.</div>';
+  } else {
+    for (const b of badges) {
+      const el = document.createElement('div');
+      el.className = 'badge' + (b.rank === 1 ? ' gold' : '');
+      el.innerHTML =
+        '<div class="bg-rank"></div><div class="bg-board"></div>' +
+        '<div class="bg-season"></div><div class="bg-score"></div>';
+      el.querySelector('.bg-rank').textContent = b.rank === 1 ? '\u{1F3C6}' : `#${b.rank}`;
+      el.querySelector('.bg-board').textContent = boardName(b.boardKey);
+      el.querySelector('.bg-season').textContent = b.seasonLabel;
+      el.querySelector('.bg-score').textContent = `${b.score} pts`;
+      badgeHost.appendChild(el);
+    }
   }
 
   $('pdMsCount').textContent = `${full.earnedCount}/${full.milestoneTotal}`;
@@ -891,7 +921,7 @@ async function endMarathon() {
   try {
     done = await api(`/marathon/${M.id}/finish`, {
       method: 'POST',
-      body: S.player ? { playerId: S.player.id } : {}
+      body: S.player ? { profileId: S.player.id } : {}
     });
   } catch (e) {
     backToSetup();
@@ -1001,7 +1031,10 @@ function celebrateProgress(p) {
 }
 
 async function saveMarathonScore(initials) {
-  return api('/leaderboard', { method: 'POST', body: { marathonId: M.id, initials } });
+  return api('/leaderboard', {
+    method: 'POST',
+    body: { marathonId: M.id, initials, profileId: S.player ? S.player.id : undefined }
+  });
 }
 
 // ------------------------------------------------------------------- rooms
@@ -1192,6 +1225,7 @@ function showResults(results) {
     renderProfileChip();
   }
   showArcadePanel(results.arcade, scoreTarget() ? scoreTarget().score : 0);
+  refreshSeason();
   $('saveScoreBtn').classList.toggle('hidden', !canSaveScore());
   $('againBtn').textContent = S.mode === 'room'
     ? (S.room && S.room.youAreHost ? 'New round' : 'Back to lobby')
@@ -1215,6 +1249,39 @@ function canSaveScore() {
   if (!target || target.score <= 0) return false;
   if (S.mode === 'room') return true;                 // rooms score per player
   return !!(S.results && S.results.arcade && S.results.arcade.makesBoard);
+}
+
+// ------------------------------------------------------------------- season
+
+function boardName(key) {
+  return key === 'marathon' ? 'Marathon' : key === '5' ? '5x5 Big' : '4x4 Classic';
+}
+
+function seasonStripText(season) {
+  if (!season || !season.season) return '';
+  const label = season.season.label;
+  if (season.daysLeft === null) return `${label} \u00B7 runs until it is ended`;
+  if (season.daysLeft === 0) return `${label} \u00B7 ends today \u2014 last chance`;
+  if (season.closingSoon) {
+    return `${label} \u00B7 ${season.daysLeft} ${season.daysLeft === 1 ? 'day' : 'days'} left \u2014 boards clear after that`;
+  }
+  return `${label} \u00B7 ${season.daysLeft} days left`;
+}
+
+function renderSeasonStrip() {
+  const el = $('seasonStrip');
+  if (!el) return;
+  const text = seasonStripText(S.season);
+  el.textContent = text;
+  el.classList.toggle('hidden', !text);
+  el.classList.toggle('soon', !!(S.season && S.season.closingSoon));
+}
+
+async function refreshSeason() {
+  try {
+    S.season = await api('/season' + (S.player ? `?playerId=${S.player.id}` : ''));
+  } catch { /* the countdown is not worth an error */ }
+  renderSeasonStrip();
 }
 
 // -------------------------------------------------------------- arcade board
@@ -1273,7 +1340,8 @@ const lbState = { board: '4' };
 async function openLeaderboard() {
   lbState.board = S.mode === 'marathon' ? 'marathon' : String(S.size);
   $('leaderboardOverlay').classList.remove('hidden');
-  await loadLeaderboard();
+  renderSeasonStrip();
+  await Promise.all([loadLeaderboard(), refreshSeason()]);
 }
 
 async function loadLeaderboard() {
@@ -1477,9 +1545,12 @@ async function saveInitials() {
   if (!initials) return say($('initialsMsg'), 'Enter at least one letter.', 'err');
 
   const target = scoreTarget();
+  // profileId is who banks the badge; playerId is which player of the round
+  // the score belongs to. They are only the same thing by coincidence.
+  const profileId = S.player ? S.player.id : undefined;
   const body = S.mode === 'room'
-    ? { ...S.creds, initials }
-    : { boardId: S.boardId, playerId: target.playerId, mode: S.mode, durationSec: S.duration, initials };
+    ? { ...S.creds, initials, profileId }
+    : { boardId: S.boardId, playerId: target.playerId, mode: S.mode, durationSec: S.duration, initials, profileId };
 
   try {
     const saved = await api('/leaderboard', { method: 'POST', body });
@@ -1674,7 +1745,9 @@ async function boot() {
   S.difficulty = S.config.defaultDifficulty || 'normal';
   S.players = defaultPlayers(2);
   bind();
+  S.season = S.config.season || null;
   await loadProfiles();
+  renderSeasonStrip();
   renderSetup();
 
   // First visit with profiles already on the server and none chosen: ask who

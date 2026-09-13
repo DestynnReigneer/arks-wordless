@@ -24,7 +24,14 @@ function startServer() {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['server.js'], {
       cwd: ROOT,
-      env: { ...process.env, PORT: String(PORT), NODE_ENV: 'test' },
+      env: {
+        ...process.env,
+        PORT: String(PORT),
+        NODE_ENV: 'test',
+        // Admin routes are deny-by-default, so the suite has to supply a
+        // token to be able to prove they are locked *and* that they work.
+        ADMIN_TOKEN: 'test-admin-token'
+      },
       stdio: ['ignore', 'pipe', 'pipe']
     });
 

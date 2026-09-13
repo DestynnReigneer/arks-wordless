@@ -4,6 +4,7 @@ const rateLimit = require('express-rate-limit');
 const db = require('./db');
 const dictionary = require('./rambler/dictionary');
 const ramblerRoutes = require('./rambler/routes');
+const ramblerSeasons = require('./rambler/seasons');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -73,6 +74,10 @@ async function notifyDiscord(request) {
 app.get('/healthz', (req, res) => {
   try {
     const stats = dictionary.stats;
+  // Open a season if there is not one, and roll over anything already due --
+  // a container that was off over a month boundary should come back current.
+  ramblerSeasons.checkDue();
+  const season = ramblerSeasons.status();
     const themes = db.listThemes().length;
     if (!stats.kids || !themes) throw new Error('not ready');
     res.json({
@@ -189,10 +194,21 @@ app.listen(PORT, () => {
   // Build the trie now rather than on the first player's request -- it takes
   // about 200ms, which is a visible stutter if it lands mid-round.
   const stats = dictionary.stats;
+
+  // Open a season if there is not one, and roll over anything already due --
+  // a container that was switched off across a month boundary should come
+  // back current rather than still running last month's board.
+  ramblerSeasons.checkDue();
+  const season = ramblerSeasons.status();
+
   console.log(`Wordless Arcade running at http://localhost:${PORT}`);
   console.log(
     `Rambler dictionary: ${stats.kids.toLocaleString()} kids / ` +
     `${stats.adult.toLocaleString()} unfiltered words (${stats.buildMs}ms)`
+  );
+  console.log(
+    `Arcade season: ${season.season.label} \u2014 ends ${season.endsAt ? season.endsAt.slice(0, 10) : 'when you say so'}` +
+    ` (${season.intervalLabel})`
   );
   if (!ADMIN_TOKEN) {
     console.warn('ADMIN_TOKEN is not set — admin routes (create/delete theme, view requests) are disabled.');

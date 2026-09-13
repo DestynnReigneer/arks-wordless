@@ -201,6 +201,8 @@ Return ONLY a single valid JSON object (no markdown, no code fences, no commenta
     try {
       await apiGet('/api/theme-requests?status=pending');
       safeStorageSet(TOKEN_KEY, candidateToken);
+      // The Rambler admin panel shares this token rather than asking twice.
+      window.ADMIN_TOKEN = candidateToken;
       lockScreen.classList.add('hidden');
       adminContent.classList.remove('hidden');
       await Promise.all([loadRequests(), loadThemes()]);
@@ -218,6 +220,7 @@ Return ONLY a single valid JSON object (no markdown, no code fences, no commenta
   lockBtn.addEventListener('click', () => {
     safeStorageRemove(TOKEN_KEY);
     token = '';
+    window.ADMIN_TOKEN = '';
     adminContent.classList.add('hidden');
     lockScreen.classList.remove('hidden');
     tokenInput.value = '';
