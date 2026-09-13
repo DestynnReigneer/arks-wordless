@@ -899,3 +899,229 @@ body.in-vice .screen { position: relative; z-index: 1; }
   .fx-banner-inner, .fx-flash, .lrung, .time-fill { transition: none !important; }
   .fx-title, .pips i.lit, .mara-clock.urgent, .board.growing, .vice .die.fresh { animation: none !important; }
 }
+
+/* ============================================================================
+   PROFILES — who is playing, and what they have banked.
+   Not accounts: no password, no email. A face and a name the family picks.
+   ========================================================================== */
+
+/* ---- the header chip ---- */
+.profile-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px 4px 5px;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+  max-width: 46%;
+}
+.profile-chip:hover { border-color: var(--accent); }
+.pc-av {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--card-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex: 0 0 auto;
+}
+.pc-info { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.pc-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.15;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-meta {
+  font-size: 10px;
+  color: var(--dim);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.profile-chip.signed .pc-meta { color: var(--accent); }
+
+/* ---- the picker ---- */
+.who-head { text-align: center; padding: 18px 0 26px; }
+.who-head h2 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+.who-head p {
+  margin: 0 auto;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 44ch;
+}
+
+.who-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 12px;
+}
+.who-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 10px 13px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.who-tile:hover, .who-tile:focus-visible {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+  background: var(--card-2);
+  outline: none;
+}
+.who-tile .av {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--card-2);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  transition: border-color 0.14s ease;
+}
+.who-tile:hover .av { border-color: var(--accent); }
+.who-tile.current .av { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.18); }
+.who-tile .nm {
+  font-size: 14px;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.who-tile .sub {
+  font-size: 11px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.who-tile.current .sub { color: var(--accent); }
+.who-tile.add .av {
+  border-style: dashed;
+  font-size: 26px;
+  color: var(--dim);
+}
+
+/* ---- avatar chooser ---- */
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 8px;
+}
+.avatar-grid button {
+  aspect-ratio: 1;
+  font-size: 24px;
+  background: var(--card-2);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.avatar-grid button:hover { transform: scale(1.08); }
+.avatar-grid button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---- profile detail ---- */
+.pd-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.pdstat {
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 11px 8px;
+  text-align: center;
+}
+.pdstat span {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.pdstat b {
+  display: block;
+  /* An eight-letter word shares a tile with a one-digit round count, so the
+     type shrinks to fit rather than breaking ISOTHERM across two lines. */
+  font-size: clamp(11px, 3.3vw, 18px);
+  margin-top: 3px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+.pd-sub {
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 600;
+}
+.pd-sub span { color: var(--accent); letter-spacing: 0; text-transform: none; }
+
+.ms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 8px;
+}
+/* Locked milestones stay legible rather than being hidden — knowing what is
+   still out there is the point of showing the set at all. */
+.ms {
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 11px 6px 9px;
+  text-align: center;
+  opacity: 0.42;
+  filter: grayscale(1);
+}
+.ms.earned {
+  opacity: 1;
+  filter: none;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.ms .em { font-size: 22px; line-height: 1.1; }
+.ms .lb {
+  display: block;
+  font-size: 10px;
+  margin-top: 5px;
+  line-height: 1.25;
+  color: var(--muted);
+}
+.ms.earned .lb { color: var(--text); }
+
+@media (max-width: 400px) {
+  .profile-chip .pc-info { display: none; }
+  .profile-chip { padding: 4px; }
+}

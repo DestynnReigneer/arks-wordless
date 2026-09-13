@@ -40,24 +40,29 @@ Because of Marathon, boards are rectangular internally. Anything that takes a bo
 
 #### Gamification
 
-- **Profiles** — one per person, with an avatar. Not accounts: no password, no email.
+- **Profiles** — one per person, with an avatar, picked from a "Who's playing?" screen. Not accounts: no password, no email.
 - **Streaks** — play on consecutive days and it climbs. Rolls over at *local* midnight, which is why `TZ` matters in the compose file.
 - **Daily challenge** — one board a day, the same for everyone in the house, generated from the date rather than stored. One attempt each, and a standings table. Because it comes from the date, it is reproducible anywhere and survives losing the database entirely.
 - **Milestones** — sixteen of them, from "find your first word" to "play thirty days running". Each pays coins.
 - **Coins and hints** — earned slowly, spent on a hint that reveals a word still sitting on the board. A hinted word buys you time but scores nothing, so coins can't be converted straight into points.
 
-### Not finished yet
-
-The server side of Marathon, profiles, streaks, dailies, milestones, coins and hints is **complete and tested** — every one of those is exercised by `npm test`. What is *not* built is the browser UI for them: the game page still only offers the four classic modes. The endpoints are there and documented below; the screens are the next job.
+### What has an interface
 
 | Feature | Server | UI |
 |---|---|---|
 | Solo / Pass & Play / Tabletop / Own Phones | done | done |
-| Difficulty + longer timers | done | not wired into the setup screen |
-| Marathon | done | not built |
-| Profiles / streaks / milestones / coins | done | not built |
-| Daily challenge | done | not built |
-| Hints | done | not built |
+| Marathon | done | done |
+| Profiles, streaks, coins, milestones | done | done |
+| Hints | done | done |
+| Difficulty + longer timers | done | done |
+| Daily challenge | done | **not built** |
+
+The daily challenge is the last one without a screen. `GET /daily` returns the
+board and the standings; nothing calls it yet.
+
+The classic modes are also still off the ARKS colour spec — Marathon and the
+profile screens were built to it, the four original modes were not.
+`docs/DESIGN.md` lists exactly which values are wrong.
 
 #### The Rambler API
 

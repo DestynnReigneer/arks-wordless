@@ -14,6 +14,13 @@
 <header>
   <a href="/" class="icon-btn" title="Back to the arcade">←</a>
   <h1>RAM<span class="lit">BLER</span></h1>
+  <button id="profileBtn" class="profile-chip" title="Switch profile">
+    <span class="pc-av" id="pcAvatar">👤</span>
+    <span class="pc-info">
+      <span class="pc-name" id="pcName">Guest</span>
+      <span class="pc-meta" id="pcMeta">tap to pick</span>
+    </span>
+  </button>
   <button id="soundBtn" class="icon-btn" title="Sound on/off">🔊</button>
   <button id="leaderboardBtn" class="icon-btn" title="Leaderboard">🏆</button>
 </header>
@@ -108,6 +115,18 @@
   </div>
 </section>
 
+<!-- ============ WHO IS PLAYING ============ -->
+<section id="profileScreen" class="screen hidden">
+  <div class="who-head">
+    <h2>Who&rsquo;s playing?</h2>
+    <p>Pick a profile and your streak, coins and milestones follow you. Guests can play everything except hints.</p>
+  </div>
+
+  <div class="who-grid" id="whoGrid"></div>
+
+  <button id="whoGuestBtn" class="ghost-btn" style="width:100%;margin-top:18px">Carry on as a guest</button>
+</section>
+
 <!-- ============ LOBBY (room mode) ============ -->
 <section id="lobbyScreen" class="screen hidden">
   <div class="code-display">
@@ -185,7 +204,10 @@
     <div class="sub">Write your words on paper. Nobody touches the phone until the buzzer — then you'll each type your list in.</div>
   </div>
 
-  <button id="doneBtn" class="ghost-btn" style="width:100%;margin-top:18px">I'm done</button>
+  <div class="mara-actions" style="margin-top:18px">
+    <button id="hintBtn" class="ghost-btn">💡 Hint</button>
+    <button id="doneBtn" class="ghost-btn">I'm done</button>
+  </div>
 </section>
 
 <!-- ============ TABLETOP WORD ENTRY ============ -->
@@ -329,6 +351,47 @@
     </div>
     <div class="msg" id="initialsMsg"></div>
     <button id="confirmInitialsBtn" class="primary-btn">Save</button>
+  </div>
+</div>
+
+<div id="newProfileOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <h2 id="newProfileTitle">New profile</h2>
+      <button id="closeNewProfileBtn" class="icon-btn">✕</button>
+    </div>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="profileNameInput" maxlength="16" placeholder="Who is this?" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Pick a face</label>
+      <div class="avatar-grid" id="avatarGrid"></div>
+    </div>
+    <div class="msg" id="newProfileMsg"></div>
+    <div class="result-actions">
+      <button id="deleteProfileBtn" class="ghost-btn hidden">Delete</button>
+      <button id="saveProfileBtn" class="primary-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="profileDetailOverlay" class="overlay hidden">
+  <div class="overlay-card wide">
+    <div class="overlay-head">
+      <h2 id="pdTitle">Profile</h2>
+      <button id="closeProfileDetailBtn" class="icon-btn">✕</button>
+    </div>
+
+    <div class="pd-stats" id="pdStats"></div>
+
+    <h3 class="pd-sub">Milestones <span id="pdMsCount"></span></h3>
+    <div class="ms-grid" id="msGrid"></div>
+
+    <div class="result-actions" style="margin-top:18px">
+      <button id="pdEditBtn" class="ghost-btn">Edit</button>
+      <button id="pdSwitchBtn" class="primary-btn">Switch profile</button>
+    </div>
   </div>
 </div>
 
