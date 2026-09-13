@@ -3,6 +3,7 @@
 const express = require('express');
 const db = require('../db');
 const seasons = require('./seasons');
+const packs = require('./packs');
 
 // Admin routes for Rambler. Mounted under /api/rambler/admin and gated by the
 // same ADMIN_TOKEN the Wordless admin already uses -- deny by default: if the
@@ -34,6 +35,7 @@ router.get('/overview', (req, res) => {
       entries: db.listArcadeBoard(key)
     })),
     players: db.listPlayers(),
+    theme: packs.active(),
     past: db.listSeasons(12).filter(s => s.endedAt)
   });
 });
@@ -83,6 +85,134 @@ router.post('/seasons/settings', (req, res, next) => {
       }
     }
     res.json(seasons.status());
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ---- theme packs ------------------------------------------------------------
+
+router.get('/themes', (req, res) => {
+  const season = db.currentSeason();
+  res.json({
+    themes: db.listRamblerThemes().map(t => ({ ...t, words: undefined, wordCount: t.wordCount })),
+    activeId: season ? season.themeId : null,
+    season
+  });
+});
+
+// One theme's words, for when the admin wants to read what they ingested.
+router.get('/themes/:id', (req, res, next) => {
+  try {
+    const theme = db.getRamblerTheme(req.params.id);
+    if (!theme) throw fail('No such pack.', 404);
+    res.json(theme);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// The prompt to paste into any chatbot. Generated rather than stored so it
+// always matches what the parser below will accept.
+router.post('/themes/prompt', (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const topic = String(body.topic || '').trim().slice(0, 60);
+    if (!topic) throw fail('What should the pack be about?', 400);
+    res.json({
+      topic,
+      prompt: packs.promptFor({
+        topic,
+        audience: body.audience,
+        count: Math.max(20, Math.min(200, parseInt(body.count, 10) || 60))
+      })
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Ingest whatever came back. Treated as untrusted text: parsed, filtered to
+// A-Z, deduped, and length-capped before it goes anywhere near the dictionary.
+router.post('/themes', (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const parsed = packs.parsePack(body.json !== undefined ? body.json : body);
+    const created = db.createRamblerTheme(parsed);
+    packs.refresh({ force: true });
+    res.status(201).json({
+      theme: { ...created, words: undefined },
+      skipped: parsed.skipped,
+      // Tell the admin now whether this pack will ever show up in play.
+      reach: packs.reachability(parsed.words)
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete('/themes/:id', (req, res, next) => {
+  try {
+    if (!db.deleteRamblerTheme(req.params.id)) throw fail('No such pack.', 404);
+    packs.refresh({ force: true });
+    res.json({ deleted: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Dress the current season in a pack (or strip it with null).
+router.post('/seasons/theme', (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const season = db.currentSeason();
+    if (!season) throw fail('There is no open season.', 409);
+
+    const themeId = body.themeId === null || body.themeId === '' ? null : String(body.themeId);
+    if (themeId && !db.getRamblerTheme(themeId)) throw fail('No such pack.', 400);
+
+    db.updateSeason(season.id, { themeId });
+    packs.refresh({ force: true });
+    res.json({ season: db.currentSeason(), theme: packs.active() });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ---- dictionary edits -------------------------------------------------------
+
+router.get('/dictionary', (req, res) => {
+  res.json({
+    edits: db.listDictionaryEdits(),
+    stats: require('./dictionary').stats,
+    lists: [
+      { key: 'block', label: 'Blocked for kids' },
+      { key: 'allow', label: 'Rescued (never blocked)' },
+      { key: 'adult', label: 'Added to unfiltered' }
+    ]
+  });
+});
+
+router.post('/dictionary', (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const list = ['block', 'allow', 'adult'].includes(body.list) ? body.list : null;
+    if (!list) throw fail('Pick a list: block, allow or adult.', 400);
+    const added = db.addDictionaryEdit(body.word, list);
+    if (!added) throw fail('Words need to be at least 3 letters, A-Z only.', 400);
+    packs.refresh({ force: true });
+    res.status(201).json(added);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete('/dictionary', (req, res, next) => {
+  try {
+    const body = req.body || {};
+    if (!db.removeDictionaryEdit(body.word, body.list)) throw fail('No such edit.', 404);
+    packs.refresh({ force: true });
+    res.json({ removed: true });
   } catch (e) {
     next(e);
   }

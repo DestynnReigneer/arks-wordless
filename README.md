@@ -44,6 +44,7 @@ Because of Marathon, boards are rectangular internally. Anything that takes a bo
 - **Streaks** — play on consecutive days and it climbs. Rolls over at *local* midnight, which is why `TZ` matters in the compose file.
 - **Daily challenge** — one board a day, the same for everyone in the house, generated from the date rather than stored. One attempt each, and a standings table. Because it comes from the date, it is reproducible anywhere and survives losing the database entirely.
 - **Milestones** — sixteen of them, from "find your first word" to "play thirty days running". Each pays coins.
+- **Theme packs** — a pack of words about a subject (Halloween, Minecraft, whatever) that a season can wear. Its words become **valid** so `ENDERMAN` scores, they are **flagged** so finding one fires a celebration and pays **double**, boards are **re-rolled** until they actually contain some, and the accent colour changes to match. Written by pasting a generated prompt into any chatbot and pasting the answer back — no API key, no cost.
 - **Seasons** — the arcade boards run on a schedule you set (monthly by default, or any interval, or manual). When a season ends every board is frozen into **badges** and then cleared, so everyone starts level. A badge records the year, season, which board, the rank and the score. Streaks, coins, milestones and lifetime bests are **never** reset — only the walls are. Players get a countdown in the last few days.
 - **The arcade board** — three walls (4x4, 5x5, Marathon), ten slots each. You only get to type your initials by beating the tenth score, and when you do, somebody is knocked off for good. Your profile keeps your personal best either way, so missing the wall costs you nothing but the wall.
 - **Coins and hints** — earned slowly, spent on a hint that reveals a word still sitting on the board. A hinted word buys you time but scores nothing, so coins can't be converted straight into points.
@@ -59,6 +60,8 @@ Because of Marathon, boards are rectangular internally. Anything that takes a bo
 | Difficulty + longer timers | done | done |
 | Arcade board (10 slots, gated entry) | done | done |
 | Seasons, badges, hall of fame | done | done |
+| Theme packs | done | done |
+| Dictionary editing from the browser | done | done |
 | Admin: seasons, moderation, profiles | done | done |
 | Daily challenge | done | **not built** |
 
@@ -68,6 +71,22 @@ board and the standings; nothing calls it yet.
 The classic modes are also still off the ARKS colour spec — Marathon and the
 profile screens were built to it, the four original modes were not.
 `docs/DESIGN.md` lists exactly which values are wrong.
+
+#### A note on theme packs and word length
+
+Measured on 400 random 4x4 boards, a theme word is reachable on:
+
+| Word length | Boards where it can be traced |
+|---|---|
+| 3–4 letters | about 23% |
+| 5–6 letters | about 0.3% |
+| 7+ letters | essentially never |
+
+That is geometry, not tuning — an eight-letter word needs a specific eight-cell
+path. So a pack of long character names will look wonderful in the admin list
+and never once appear in play. The generated prompt demands that two thirds of
+the words be 3–5 letters, and the ingest reports the pack's measured
+reachability so you can send it back for shorter words.
 
 #### The Rambler API
 
@@ -200,6 +219,8 @@ Visit `/admin.html` and enter your `ADMIN_TOKEN`. Two tabs.
 - Moderate the boards: remove a single entry (for when a child puts something unrepeatable in their three letters) or clear a whole board
 - Manage profiles: rename, gift coins, delete
 - Hall of fame: every finished season and who won each board
+- Theme packs: copy a prompt, paste the answer back, and dress the season in it. The ingest tells you what percentage of boards the pack's words will actually appear on, so you find out immediately if it is all nine-letter names
+- Dictionary: add or remove words from the browser. Edits live in the database, not the word files, so they survive a `docker compose pull`
 
 **Wordless:**
 - See pending theme requests, with a one-click "Copy Prompt" to paste into an AI chatbot (or use however you like) to generate the theme's word list

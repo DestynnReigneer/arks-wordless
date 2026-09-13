@@ -4,14 +4,16 @@ const { minLength } = require('./solver');
 
 // Standard Boggle scoring. Big Boggle uses the same table but starts at
 // four letters, so a 4-letter word is worth 1 point on both boards.
-function wordPoints(word, spec, min = minLength(spec)) {
+// A word from the active theme pack is worth double. The multiplier is here
+// rather than in the dictionary so scoring stays a pure function of the word --
+// the caller decides whether it is themed.
+const THEME_MULTIPLIER = 2;
+
+function wordPoints(word, spec, min = minLength(spec), { themed = false } = {}) {
   const n = word.length;
   if (n < min) return 0;
-  if (n <= 4) return 1;
-  if (n === 5) return 2;
-  if (n === 6) return 3;
-  if (n === 7) return 5;
-  return 11;
+  const base = n <= 4 ? 1 : n === 5 ? 2 : n === 6 ? 3 : n === 7 ? 5 : 11;
+  return themed ? base * THEME_MULTIPLIER : base;
 }
 
 // The rule that makes Boggle Boggle: a word more than one player found is
@@ -20,7 +22,7 @@ function wordPoints(word, spec, min = minLength(spec)) {
 //
 // players: [{ id, name, words: string[] }]
 // Returns per-player breakdowns plus the set of cancelled words.
-function scoreRound({ players, size, min, validator }) {
+function scoreRound({ players, size, min, validator, isThemed = () => false }) {
   const multi = players.length > 1;
   const counts = new Map();
 
@@ -52,14 +54,15 @@ function scoreRound({ players, size, min, validator }) {
     const words = rows.map(row => {
       if (!row.valid) return { ...row, points: 0, cancelled: false };
       const isCancelled = cancelled.has(row.word);
-      const points = isCancelled ? 0 : wordPoints(row.word, size, min);
+      const themed = isThemed(row.word);
+      const points = isCancelled ? 0 : wordPoints(row.word, size, min, { themed });
       score += points;
       valid++;
       if (points > 0 && (!best || points > best.points ||
           (points === best.points && row.word.length > best.word.length))) {
         best = { word: row.word, points };
       }
-      return { ...row, points, cancelled: isCancelled };
+      return { ...row, points, cancelled: isCancelled, themed };
     });
 
     words.sort((a, b) => b.points - a.points || a.word.localeCompare(b.word));
@@ -91,4 +94,4 @@ function scoreRound({ players, size, min, validator }) {
   return { results, cancelled: [...cancelled].sort() };
 }
 
-module.exports = { wordPoints, scoreRound };
+module.exports = { wordPoints, scoreRound, THEME_MULTIPLIER };

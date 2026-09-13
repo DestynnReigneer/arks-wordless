@@ -35,6 +35,31 @@ function readList(file, { optional = false } = {}) {
     .filter(line => line && !line.startsWith('#'));
 }
 
+// Words layered on top of the files at runtime: admin edits, and the active
+// theme pack. Kept as plain data here rather than read from the database, so
+// this module stays a pure dictionary and the caller decides what is active.
+let overlay = {
+  block: [],          // removed from the kids list
+  allow: [],          // rescued from the blocklist
+  adult: [],          // added to the unfiltered list
+  theme: null         // { id, words, audience }
+};
+
+function applyOverlay(next = {}) {
+  overlay = {
+    block: next.block || [],
+    allow: next.allow || [],
+    adult: next.adult || [],
+    theme: next.theme || null
+  };
+  cache = null;       // rebuilt lazily on the next read
+  return overlay;
+}
+
+function activeTheme() {
+  return overlay.theme;
+}
+
 const CLEAN = /^[A-Z]+$/;
 function normalise(list, minLength) {
   const out = [];
@@ -106,7 +131,8 @@ function buildTrie() {
   // no point carrying entries that could never have matched anyway.
   const baseSet = new Set(base);
   const blocked = new Set();
-  for (const word of normalise(readList('blocklist-kids.txt'), 3)) {
+  const blockSources = [...normalise(readList('blocklist-kids.txt'), 3), ...normalise(overlay.block, 3)];
+  for (const word of blockSources) {
     for (const form of inflect(word)) {
       if (baseSet.has(form)) blocked.add(form);
     }
@@ -116,7 +142,8 @@ function buildTrie() {
   // bystanders -- "heroin" produces HEROINES, "bonk" produces BONKERS -- and
   // wrongly rejecting a real word is the exact frustration this dictionary
   // split exists to prevent.
-  for (const word of normalise(readList('allowlist-kids.txt', { optional: true }), 3)) {
+  for (const word of [...normalise(readList('allowlist-kids.txt', { optional: true }), 3),
+                     ...normalise(overlay.allow, 3)]) {
     blocked.delete(word);
   }
 
@@ -124,8 +151,25 @@ function buildTrie() {
     insert(word, blocked.has(word) ? ADULT : KIDS | ADULT);
   }
 
-  const supplement = normalise(readList('supplement-adult.txt'), 3);
+  const supplement = [
+    ...normalise(readList('supplement-adult.txt'), 3),
+    ...normalise(overlay.adult, 3)
+  ];
   for (const word of supplement) insert(word, ADULT);
+
+  // The active theme pack. Its words are inserted so they genuinely score,
+  // and remembered separately so finding one can be made an event.
+  const themeWords = new Set();
+  if (overlay.theme) {
+    const audience = overlay.theme.audience || 'all';
+    const bits = audience === 'kids' ? KIDS | ADULT
+      : audience === 'adult' ? ADULT
+        : KIDS | ADULT;
+    for (const word of normalise(overlay.theme.words || [], 3)) {
+      insert(word, bits);
+      themeWords.add(word);
+    }
+  }
 
   // Common words drive the kids' end-of-round reveal. Showing a child every
   // word the solver found means a wall of ZAX and AALII; showing only the
@@ -138,11 +182,14 @@ function buildTrie() {
   return {
     root,
     common,
+    themeWords,
     stats: {
       base: base.length,
       blocked: blocked.size,
       supplement: supplement.length,
       common: common.size,
+      themeWords: themeWords.size,
+      themeId: overlay.theme ? overlay.theme.id : null,
       kids: base.length - blocked.size,
       adult: base.length + supplement.length
     }
@@ -181,6 +228,12 @@ function isCommon(word) {
   return load().common.has(word.toUpperCase());
 }
 
+// Is this one of the active theme pack's words? Drives the bonus and the
+// celebration -- a themed word should never land as a quiet five points.
+function isThemeWord(word) {
+  return load().themeWords.has(String(word || '').toUpperCase());
+}
+
 function listProfiles() {
   const { stats } = load();
   return Object.values(PROFILES).map(p => ({
@@ -193,6 +246,7 @@ function listProfiles() {
 
 module.exports = {
   KIDS, ADULT, TERM, PRE, PROFILES,
-  load, isWord, isCommon, listProfiles, profileBit,
+  load, isWord, isCommon, isThemeWord, listProfiles, profileBit,
+  applyOverlay, activeTheme,
   get stats() { return load().stats; }
 };

@@ -13,6 +13,7 @@ const rooms = require('./rooms');
 const marathon = require('./marathon');
 const progress = require('./progress');
 const seasons = require('./seasons');
+const packs = require('./packs');
 const adminRouter = require('./admin');
 
 const router = express.Router();
@@ -93,6 +94,7 @@ router.get('/config', (req, res) => {
     milestones: progress.catalogue(),
     today: progress.today(),
     season: seasons.status(),
+    theme: packs.active(),
     profiles: dictionary.listProfiles(),
     adultRequiresPin: !!ADULT_PIN,
     maxPlayers: rooms.MAX_PLAYERS,
@@ -142,11 +144,13 @@ router.post('/check', checkLimiter, (req, res, next) => {
       body.word,
       entry.minLength
     );
+    const word = String(body.word || '').toUpperCase().replace(/[^A-Z]/g, '');
     res.json({
-      word: String(body.word || '').toUpperCase().replace(/[^A-Z]/g, ''),
+      word,
       valid: verdict.valid,
       reason: verdict.reason,
-      path: verdict.path || null
+      path: verdict.path || null,
+      themed: verdict.valid && dictionary.isThemeWord(word)
     });
   } catch (e) {
     next(e);
@@ -223,6 +227,7 @@ router.post('/score', scoreLimiter, (req, res, next) => {
 // The countdown, and whatever the asking profile has won before.
 router.get('/season', (req, res) => {
   seasons.checkDue();
+  packs.refresh();
   const status = seasons.status();
   const playerId = String(req.query.playerId || '');
   res.json({

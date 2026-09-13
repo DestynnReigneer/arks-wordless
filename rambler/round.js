@@ -65,6 +65,17 @@ function resolveMinLength(spec, difficultyId) {
 
 const MAX_ROLLS = 25;
 
+// How many of the active theme's words a board should contain before it is
+// considered worth playing. One, not two: measured on random boards, a short
+// theme word is reachable about a quarter of the time, so insisting on two
+// would mean nearly every board falls back to the best near-miss.
+const THEME_WORD_FLOOR = 1;
+
+// Themed boards get a bigger roll budget. Solving costs about a millisecond,
+// so spending 120 of them to find a board that actually wears the theme is
+// cheaper than the disappointment of one that does not.
+const MAX_THEME_ROLLS = 120;
+
 function qualityFloor(spec, difficultyId) {
   const cells = cellCount(spec);
   const table = difficultyOf(difficultyId).minWords;
@@ -82,15 +93,40 @@ function createBoard({ size = 4, cols, rows, profile = 'kids', difficulty = DEFA
   const min = resolveMinLength(spec, difficulty);
   const floor = qualityFloor(spec, difficulty);
 
+  // With a theme pack on, a board is only worth playing if some of the theme
+  // is actually reachable on it -- otherwise "Halloween season" is a label
+  // with nothing behind it. Solving costs about a millisecond, so we can keep
+  // rolling and simply take the best board we saw if none is ideal.
+  const themed = !!dictionary.activeTheme();
+  const themeFloor = themed ? THEME_WORD_FLOOR : 0;
+
   let board = null;
   let words = null;
+  let themeHits = 0;
   let rolls = 0;
+  let best = null;
 
   do {
     board = rollBoard(spec);
     words = solve(board, spec, profile, { min });
+    themeHits = themed
+      ? [...words.keys()].filter(w => dictionary.isThemeWord(w)).length
+      : 0;
     rolls++;
-  } while (words.size < floor && rolls < MAX_ROLLS);
+
+    const good = words.size >= floor && themeHits >= themeFloor;
+    if (good) { best = null; break; }
+    // Keep whichever near-miss was closest, so a pack with rare letters
+    // degrades to "the best board we could find" instead of a random one.
+    const rank = Math.min(words.size, floor) + themeHits * 25;
+    if (!best || rank > best.rank) best = { board, words, themeHits, rank };
+  } while (rolls < (themed ? MAX_THEME_ROLLS : MAX_ROLLS));
+
+  if (best) {
+    board = best.board;
+    words = best.words;
+    themeHits = best.themeHits;
+  }
 
   return {
     board,
@@ -101,6 +137,7 @@ function createBoard({ size = 4, cols, rows, profile = 'kids', difficulty = DEFA
     difficulty: difficultyOf(difficulty).id,
     minLength: min,
     totalWords: words.size,
+    themeWords: themeHits,
     rolls
   };
 }
@@ -138,7 +175,8 @@ function scoreSubmissions({ board, size, cols, rows, profile, difficulty, minLen
     players,
     size: spec,
     min: floor,
-    validator: makeValidator(board, spec, profile, floor)
+    validator: makeValidator(board, spec, profile, floor),
+    isThemed: w => dictionary.isThemeWord(w)
   });
 
   const all = solve(board, spec, profile, { min: floor });
@@ -151,16 +189,19 @@ function scoreSubmissions({ board, size, cols, rows, profile, difficulty, minLen
   for (const word of all.keys()) {
     if (claimed.has(word)) continue;
     if (profile === 'kids' && !dictionary.isCommon(word)) continue;
-    missed.push({ word, points: wordPoints(word, spec, floor) });
+    const themed = dictionary.isThemeWord(word);
+    missed.push({ word, points: wordPoints(word, spec, floor, { themed }), themed });
   }
-  missed.sort((a, b) => b.points - a.points || a.word.localeCompare(b.word));
+  // Theme words first in the reveal: they are the point of the season.
+  missed.sort((a, b) => (b.themed ? 1 : 0) - (a.themed ? 1 : 0)
+    || b.points - a.points || a.word.localeCompare(b.word));
 
   // Naming DISEUSE as the best word on a kids board is no use to a child --
   // and it contradicts the reveal, which deliberately hides words like that.
   // So the headline word comes from the same pool they are actually shown.
   const pool = [...all.keys()].filter(w => profile !== 'kids' || dictionary.isCommon(w));
   const best = pool
-    .map(w => ({ word: w, points: wordPoints(w, spec, floor) }))
+    .map(w => ({ word: w, points: wordPoints(w, spec, floor, { themed: dictionary.isThemeWord(w) }) }))
     .sort((a, b) => b.points - a.points || b.word.length - a.word.length)[0] || null;
 
   return {
@@ -180,7 +221,7 @@ function pathFor(board, spec, word) {
 }
 
 module.exports = {
-  SIZES, DURATIONS, DEFAULT_DURATION,
+  SIZES, DURATIONS, DEFAULT_DURATION, THEME_WORD_FLOOR,
   DIFFICULTIES, DEFAULT_DIFFICULTY, difficultyOf, resolveMinLength,
   createBoard, validateWord, scoreSubmissions, pathFor
 };

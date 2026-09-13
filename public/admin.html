@@ -186,6 +186,70 @@
     </div>
 
     <div class="admin-section">
+      <h2>🎭 Theme packs</h2>
+      <p class="note" style="font-size:12px;opacity:.7;line-height:1.6;margin:0 0 12px">
+        A pack adds its words to the dictionary so they score, flags them so
+        finding one is an event, and biases boards toward containing them.
+        Dress a season in one and the whole game wears it.
+      </p>
+
+      <div class="field-row">
+        <div class="grow">
+          <label for="packTopic">What is the pack about?</label>
+          <input type="text" id="packTopic" maxlength="60" placeholder="e.g. Halloween, Minecraft, Nightmare Before Christmas" style="width:100%">
+        </div>
+        <div>
+          <label for="packAudience">For</label>
+          <select id="packAudience">
+            <option value="all">everyone</option>
+            <option value="kids">kids only</option>
+            <option value="adult">adults only</option>
+          </select>
+        </div>
+        <button class="small-btn" id="copyPromptBtn">Copy prompt</button>
+      </div>
+
+      <div class="field-row">
+        <div class="grow">
+          <label for="packJson">Paste what the chatbot gave back</label>
+          <textarea id="packJson" rows="4" placeholder='{ "label": "...", "words": ["..."] }'
+            style="width:100%;background:#10121a;border:1px solid var(--tile-border);color:var(--text);border-radius:7px;padding:9px;font-family:inherit;font-size:12.5px"></textarea>
+        </div>
+      </div>
+      <div class="field-row">
+        <button class="small-btn" id="ingestPackBtn">Add pack</button>
+      </div>
+      <div id="packMsg" class="admin-msg"></div>
+
+      <div id="packList" style="margin-top:14px"></div>
+    </div>
+
+    <div class="admin-section">
+      <h2>📖 Dictionary</h2>
+      <p class="note" style="font-size:12px;opacity:.7;line-height:1.6;margin:0 0 12px">
+        Edits live in the database, not in the word files, so they survive a
+        <code>docker compose pull</code>.
+      </p>
+      <div class="field-row">
+        <div class="grow">
+          <label for="dictWord">Word</label>
+          <input type="text" id="dictWord" maxlength="20" placeholder="e.g. FART" style="width:100%">
+        </div>
+        <div>
+          <label for="dictList">List</label>
+          <select id="dictList">
+            <option value="block">block for kids</option>
+            <option value="allow">never block</option>
+            <option value="adult">add to unfiltered</option>
+          </select>
+        </div>
+        <button class="small-btn" id="addWordBtn">Add</button>
+      </div>
+      <div id="dictMsg" class="admin-msg"></div>
+      <div id="dictList2" style="margin-top:12px"></div>
+    </div>
+
+    <div class="admin-section">
       <h2>📋 Arcade boards</h2>
       <div class="board-tabs" id="boardTabs"></div>
       <div id="boardList"></div>

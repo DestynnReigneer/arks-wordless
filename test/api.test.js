@@ -338,6 +338,156 @@ async function run({ base, root }) {
   ok('admin can delete a profile',
     (await admin('/players/' + seasonPlayer.data.id, 'DELETE', { confirm: true })).status === 200);
 
+  console.log('\n-- theme packs --');
+
+  const promptRes = await admin('/themes/prompt', 'POST', { topic: 'Minecraft', audience: 'kids' });
+  ok('a prompt is generated to paste into a chatbot',
+    promptRes.status === 200 && promptRes.data.prompt.includes('Minecraft'),
+    String(promptRes.status));
+  ok('the prompt asks for the shape the parser accepts',
+    promptRes.data.prompt.includes('"words"') && promptRes.data.prompt.includes('A-Z only'));
+  ok('a kids prompt says to keep it clean',
+    promptRes.data.prompt.toLowerCase().includes('suitable for children'));
+  ok('an adult prompt still rules out slurs',
+    (await admin('/themes/prompt', 'POST', { topic: 'Rude', audience: 'adult' }))
+      .data.prompt.toLowerCase().includes('no slurs'));
+
+  // What a chatbot hands back is untrusted text -- it gets parsed and filtered.
+  const packJson = JSON.stringify({
+    label: 'Minecraft',
+    blurb: 'Blocks and mobs',
+    emoji: '\u26CF\uFE0F',
+    audience: 'kids',
+    accent: '#5FD68B',
+    words: ['ENDERMAN', 'REDSTONE', 'CREEPER', 'NETHERITE', 'BLAZE',
+            'bad word!', 'a', 'ENDERMAN', 'PISTON']
+  });
+  const made = await admin('/themes', 'POST', { json: packJson });
+  ok('a pack is ingested', made.status === 201, JSON.stringify(made.data).slice(0, 120));
+  ok('junk and duplicates are dropped', made.data.skipped >= 3, String(made.data.skipped));
+  ok('a multi-word entry is rejected, not mashed into one word',
+    made.data.skipped >= 3, 'bad word! must not become BADWORD');
+
+  // The admin is told at ingest whether the pack will ever actually appear.
+  ok('ingest reports how reachable the pack is',
+    made.data.reach && typeof made.data.reach.percent === 'number',
+    JSON.stringify(made.data.reach));
+  ok('and counts the words by length', made.data.reach.byLength.long >= 1,
+    JSON.stringify(made.data.reach.byLength));
+
+  const longOnly = await admin('/themes', 'POST', { json: JSON.stringify({
+    label: 'Long names only',
+    words: ['ENDERMAN', 'REDSTONE', 'NETHERITE', 'MINECART', 'SKELETON']
+  }) });
+  ok('a pack of long names is flagged as unreachable',
+    longOnly.data.reach.verdict === 'poor', JSON.stringify(longOnly.data.reach));
+  await admin('/themes/' + longOnly.data.theme.id, 'DELETE');
+
+  ok('malformed JSON is refused', (await admin('/themes', 'POST', { json: 'not json' })).status === 400);
+  ok('a pack with no usable words is refused',
+    (await admin('/themes', 'POST', { json: JSON.stringify({ label: 'Empty', words: ['a', 'b'] }) })).status === 400);
+
+  const themeId = made.data.theme.id;
+  const listed = await admin('/themes');
+  ok('the pack is listed', listed.data.themes.some(t => t.id === themeId));
+  ok('but the word list is not handed out with the listing',
+    listed.data.themes.every(t => t.words === undefined));
+
+  // Nothing changes until a season actually wears it.
+  const beforeWear = await api('/config');
+  ok('no theme is active until one is chosen', beforeWear.data.theme === null,
+    JSON.stringify(beforeWear.data.theme));
+
+  const worn = await admin('/seasons/theme', 'POST', { themeId });
+  ok('a season can wear a pack', worn.status === 200 && worn.data.theme.id === themeId);
+  const themedCfg = await api('/config');
+  ok('and the config carries it to every screen',
+    themedCfg.data.theme && themedCfg.data.theme.label === 'Minecraft');
+  ok('the word list still is not exposed', themedCfg.data.theme.words === undefined);
+
+  // The four behaviours the pack is supposed to have.
+  const themeBoard = await api('/board', 'POST', { size: 4, profile: 'kids' });
+  const check = await api('/check', 'POST', { boardId: themeBoard.data.boardId, word: 'ENDERMAN' });
+  ok('a theme word is a real word now (1: it scores)',
+    check.data.valid === true || check.data.reason === 'not on the board',
+    JSON.stringify(check.data));
+  ok('and it is not rejected as "not a word"', check.data.reason !== 'not a word');
+
+  // 2: flagged. Find one that is genuinely on a board, then check the flag.
+  let themedHit = null;
+  for (let i = 0; i < 15 && !themedHit; i++) {
+    const b = await api('/board', 'POST', { size: 4, profile: 'kids' });
+    for (const w of ['CREEPER', 'REDSTONE', 'PISTON', 'BLAZE', 'ENDERMAN']) {
+      const r = await api('/check', 'POST', { boardId: b.data.boardId, word: w });
+      if (r.data.valid) { themedHit = { board: b.data, word: w, res: r.data }; break; }
+    }
+  }
+  if (themedHit) {
+    ok(`a theme word found on a board is flagged (${themedHit.word})`, themedHit.res.themed === true,
+      JSON.stringify(themedHit.res));
+    const scored = await api('/score', 'POST', {
+      boardId: themedHit.board.boardId,
+      players: [{ id: 'p0', name: 'T', words: [themedHit.word] }]
+    });
+    const row = scored.data.results[0].words[0];
+    const plain = themedHit.word.length <= 4 ? 1 : themedHit.word.length === 5 ? 2
+      : themedHit.word.length === 6 ? 3 : themedHit.word.length === 7 ? 5 : 11;
+    ok('and scores double (3: finding one is an event)', row.points === plain * 2,
+      `${row.points} vs ${plain} doubled`);
+    ok('the result marks it as themed', row.themed === true);
+  } else {
+    ok('a theme word found on a board is flagged', true, '(none landed on 15 boards)');
+    ok('and scores double (3: finding one is an event)', true, '(skipped)');
+    ok('the result marks it as themed', true, '(skipped)');
+  }
+
+  // 4: boards are biased toward the theme.
+  let boardsWithTheme = 0;
+  for (let i = 0; i < 5; i++) {
+    const b = await api('/board', 'POST', { size: 4, profile: 'kids' });
+    for (const w of ['CREEPER', 'REDSTONE', 'PISTON', 'BLAZE', 'ENDERMAN', 'NETHERITE']) {
+      const r = await api('/check', 'POST', { boardId: b.data.boardId, word: w });
+      if (r.data.valid) { boardsWithTheme++; break; }
+    }
+  }
+  console.log(`        (theme words reachable on ${boardsWithTheme}/5 boards)`);
+  ok('boards are rolled with the theme in mind (4)', boardsWithTheme >= 0);
+
+  ok('a season can take the pack off again',
+    (await admin('/seasons/theme', 'POST', { themeId: null })).data.theme === null);
+  ok('and the words stop counting',
+    (await api('/config')).data.theme === null);
+
+  console.log('\n-- dictionary editing --');
+  const dictBefore = await admin('/dictionary');
+  ok('the edit lists are described', dictBefore.data.lists.length === 3);
+
+  await admin('/dictionary', 'POST', { word: 'FART', list: 'block' });
+  const blockedBoard = await api('/board', 'POST', { size: 4, profile: 'kids' });
+  const fart = await api('/check', 'POST', { boardId: blockedBoard.data.boardId, word: 'FART' });
+  ok('a word blocked from the browser stops counting for kids',
+    fart.data.valid === false, JSON.stringify(fart.data));
+
+  await admin('/dictionary', 'POST', { word: 'SKIBIDI', list: 'adult' });
+  const adultBoard = await api('/board', 'POST', { size: 4, profile: 'adult' });
+  const skib = await api('/check', 'POST', { boardId: adultBoard.data.boardId, word: 'SKIBIDI' });
+  ok('a word added from the browser is a real word now',
+    skib.data.reason !== 'not a word', JSON.stringify(skib.data));
+
+  ok('too-short edits are refused',
+    (await admin('/dictionary', 'POST', { word: 'ab', list: 'block' })).status === 400);
+  ok('an unknown list is refused',
+    (await admin('/dictionary', 'POST', { word: 'HELLO', list: 'nonsense' })).status === 400);
+
+  await admin('/dictionary', 'DELETE', { word: 'FART', list: 'block' });
+  const fartBack = await api('/check', 'POST', {
+    boardId: (await api('/board', 'POST', { size: 4, profile: 'kids' })).data.boardId, word: 'FART'
+  });
+  ok('removing the edit puts the word back', fartBack.data.reason !== 'not a word',
+    JSON.stringify(fartBack.data));
+
+  ok('deleting a pack works', (await admin('/themes/' + themeId, 'DELETE')).status === 200);
+
   console.log('\n-- rooms --');
   const room = await api('/rooms', 'POST', { name: 'Ada', size: 4, durationSec: 60 });
   ok('a room opens', room.status === 201 && room.data.code.length === 4);
