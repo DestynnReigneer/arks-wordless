@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine
+FROM node:26-alpine
 
 # Tini reaps zombies and forwards signals, so `docker compose stop` actually
 # stops the process instead of waiting out the 10s kill timeout.
