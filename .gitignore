@@ -1,10 +1,23 @@
-node_modules/
-data/*.db
-data/*.db-journal
+# Secrets — never commit these
 .env
+.env.*
+!.env.example
 
-# Test + runtime artefacts
+# Dependencies
+node_modules/
+
+# Runtime state. The SQLite database lives here and is bind-mounted into the
+# container; it is the user's data, not the project's.
 data/
-boot.log
+
+# Logs and build noise
 *.log
+boot.log
+npm-debug.log
+
+# OS / editor cruft
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
