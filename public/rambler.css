@@ -1221,3 +1221,176 @@ body.in-vice .screen { position: relative; z-index: 1; }
   font-weight: 600;
 }
 .chip.themed sup { color: var(--accent); }
+
+/* ---- daily challenge ---- */
+
+/* Pinned above the modes rather than sitting among them: the daily is a thing
+   of today that expires, not another way of playing. The tear-off date block
+   is the whole point of the card -- it says "this is not the same board you
+   played yesterday" before a word of copy is read. */
+.daily-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 13px 14px;
+  margin-bottom: 22px;
+  background: linear-gradient(135deg, var(--card-2), var(--card));
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.daily-card:hover, .daily-card:focus-visible { border-color: var(--accent); }
+.daily-card.played { border-left-color: var(--good); }
+
+.dc-date {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 5px 0 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.dc-day {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.dc-month {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-top: 3px;
+}
+.dc-body { flex: 1; min-width: 0; }
+.dc-title { display: block; font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+.dc-sub { display: block; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.dc-right {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.daily-card.played .dc-right { color: var(--good); }
+
+.daily-head { text-align: center; padding: 20px 0 22px; }
+.dh-date {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+.dh-day {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.dh-rest {
+  font-size: 12px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.daily-head h2 {
+  margin: 0 0 10px;
+  font-size: 21px;
+  letter-spacing: 1px;
+}
+.dh-blurb {
+  margin: 0 auto;
+  max-width: 42ch;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.dh-countdown {
+  margin-top: 14px;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.dh-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.dh-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.dh-stat b {
+  font-size: 19px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.dh-stat span {
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--dim);
+  text-align: center;
+}
+.dh-stat.lit b { color: var(--accent); }
+
+/* Standings carry a face, because the daily is the one board where the names
+   are people you live with rather than three letters on a cabinet. */
+.d-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.d-row:last-child { border-bottom: none; }
+.d-row .r {
+  width: 22px;
+  color: var(--dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.d-row .av { font-size: 18px; line-height: 1; }
+.d-row .nm { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-row .tag {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--dim);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 5px;
+  flex: 0 0 auto;
+}
+.d-row .s { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.d-row.mine {
+  background: var(--accent-soft);
+  border-radius: 7px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.d-row.mine .nm { color: var(--accent); }
+.d-row.first .r { color: var(--accent); }

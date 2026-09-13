@@ -208,6 +208,39 @@ async function run({ base, root }) {
   ok('milestones fire', dScore.data.progress.milestones.length > 0);
   ok('the daily now reads as played', (await api('/daily?playerId=' + pid)).data.alreadyPlayed === true);
 
+  console.log('\n-- the daily challenge screen --');
+  ok('the daily carries its own fixed clock', daily.data.durationSec === 240, String(daily.data.durationSec));
+  ok('and says how many words are on it', daily.data.totalWords >= 35, String(daily.data.totalWords));
+  ok('and when it turns over', !!daily.data.resetsAt && new Date(daily.data.resetsAt) > new Date());
+
+  // The whole point of the daily. The board used to be seeded with the
+  // dictionary as well as the date, which quietly compared a kid and an adult
+  // in the same house on two different boards.
+  const dailyAdult = await api('/daily?profile=adult');
+  ok('kids and adults get the same sixteen letters',
+    dailyAdult.data.board.join('') === daily.data.board.join(''));
+
+  // Scoring a daily hands back the house standings with it, so the results
+  // screen can show a position without a second request.
+  ok('scoring a daily returns the standings', !!dScore.data.daily);
+  ok('and counts the round', dScore.data.daily.counted === true);
+  ok('and finds the player in them', dScore.data.daily.you && dScore.data.daily.you.playerId === pid);
+  ok('standings remember which dictionary was played',
+    dScore.data.daily.standings[0].profile === 'kids', String(dScore.data.daily.standings[0].profile));
+  ok('and carry a rank', dScore.data.daily.standings[0].rank === 1);
+
+  // One scoring go. Replaying is allowed -- telling a child no is worse than
+  // the alternative -- but it banks nothing and must not overwrite the score.
+  const replay = await api('/score', 'POST', {
+    boardId: (await api('/daily?playerId=' + pid)).data.boardId,
+    profileId: pid,
+    players: [{ id: 'p0', name: 'Tester', words: dWords.slice(0, 1) }]
+  });
+  ok('a replayed daily does not count again', replay.data.daily.counted === false);
+  ok('and leaves the first score standing',
+    replay.data.daily.you.score === dScore.data.daily.you.score,
+    `${replay.data.daily.you.score} vs ${dScore.data.daily.you.score}`);
+
   const coinsBefore = (await api('/players/' + pid)).data.coins;
   const hintBoard = await api('/board', 'POST', { size: 4 });
   const hint = await api('/hint', 'POST', { boardId: hintBoard.data.boardId, playerId: pid, found: [] });

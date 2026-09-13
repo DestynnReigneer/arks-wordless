@@ -69,6 +69,7 @@ db.exec(`
     score INTEGER NOT NULL,
     words INTEGER NOT NULL,
     best_word TEXT NOT NULL DEFAULT '',
+    profile TEXT NOT NULL DEFAULT 'kids',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (day, player_id)
   );
@@ -205,6 +206,12 @@ ensureColumn('rambler_scores', 'player_id', 'TEXT');
 
 // Which season a score belongs to, so a board can be rebuilt after the fact.
 ensureColumn('rambler_scores', 'season_id', 'INTEGER');
+
+// Which dictionary somebody played the daily on. Everyone gets the same
+// letters, but the unfiltered list is wider, so an adult's 55 and a kid's 40
+// are not the same achievement. The standings say which was which instead of
+// quietly ranking them against each other.
+ensureColumn('rambler_daily', 'profile', "TEXT NOT NULL DEFAULT 'kids'");
 
 const FONT_STACKS = {
   sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -957,14 +964,17 @@ function awardMilestone(playerId, code) {
 
 function getDailyResult(day, playerId) {
   const r = db.prepare('SELECT * FROM rambler_daily WHERE day = ? AND player_id = ?').get(day, playerId);
-  return r ? { day: r.day, playerId: r.player_id, score: r.score, words: r.words, bestWord: r.best_word } : null;
+  return r ? {
+    day: r.day, playerId: r.player_id, score: r.score,
+    words: r.words, bestWord: r.best_word, profile: r.profile || 'kids'
+  } : null;
 }
 
-function recordDaily({ day, playerId, score, words, bestWord }) {
+function recordDaily({ day, playerId, score, words, bestWord, profile = 'kids' }) {
   const info = db.prepare(`
-    INSERT OR IGNORE INTO rambler_daily (day, player_id, score, words, best_word)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(day, playerId, score, words, bestWord || '');
+    INSERT OR IGNORE INTO rambler_daily (day, player_id, score, words, best_word, profile)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(day, playerId, score, words, bestWord || '', profile);
   return info.changes > 0;
 }
 
@@ -973,9 +983,10 @@ function listDaily(day) {
     SELECT d.*, p.name, p.avatar FROM rambler_daily d
     LEFT JOIN rambler_players p ON p.id = d.player_id
     WHERE d.day = ? ORDER BY d.score DESC, d.created_at ASC
-  `).all(day).map(r => ({
+  `).all(day).map((r, i) => ({
+    rank: i + 1,
     playerId: r.player_id, name: r.name || 'Unknown', avatar: r.avatar || '🙂',
-    score: r.score, words: r.words, bestWord: r.best_word
+    score: r.score, words: r.words, bestWord: r.best_word, profile: r.profile || 'kids'
   }));
 }
 

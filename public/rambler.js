@@ -17,8 +17,9 @@ const S = {
   difficulty: 'normal',
   season: null,          // current season + countdown, from /config and /season
   theme: null,           // the theme pack the season is wearing, if any
+  daily: null,           // today's board and the house standings, from /daily
   player: null,          // the profile currently playing; null means guest
-  players: [],
+  profiles: [],          // every profile on the server -- NOT the round roster
   avatars: [],
   adultPin: '',
 
@@ -47,9 +48,16 @@ const S = {
 // ---------------------------------------------------------------- utilities
 
 async function api(path, { method = 'GET', body } = {}) {
+  // The adult PIN rides on every request once it has been entered. Posts could
+  // put it in the body, but GETs cannot, and a query string would leave it in
+  // logs and browser history.
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (S.adultPin) headers['X-Adult-Pin'] = S.adultPin;
+
   const res = await fetch(API + path, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers: Object.keys(headers).length ? headers : undefined,
     body: body ? JSON.stringify(body) : undefined
   });
   let data = null;
@@ -80,8 +88,9 @@ function mmss(ms) {
 }
 
 function screen(name) {
-  for (const id of ['setupScreen', 'profileScreen', 'lobbyScreen', 'gateScreen', 'playScreen',
-                    'entryScreen', 'resultsScreen', 'marathonScreen', 'maraResultsScreen']) {
+  for (const id of ['setupScreen', 'profileScreen', 'dailyScreen', 'lobbyScreen', 'gateScreen',
+                    'playScreen', 'entryScreen', 'resultsScreen', 'marathonScreen',
+                    'maraResultsScreen']) {
     $(id).classList.toggle('hidden', id !== `${name}Screen`);
   }
   window.scrollTo(0, 0);
@@ -370,9 +379,9 @@ function beginTurn() {
   paintTrace();
   renderFound();
 
-  const solo = S.mode === 'solo';
+  const alone = S.mode === 'solo' || S.mode === 'daily';
   const tabletop = S.mode === 'tabletop';
-  $('turnName').innerHTML = solo || tabletop ? '' : `<b>${player.name}</b>'s turn`;
+  $('turnName').innerHTML = alone || tabletop ? '' : `<b>${player.name}</b>'s turn`;
   $('playRoster').classList.add('hidden');   // single-device modes have no roster
   $('typeRow').classList.toggle('hidden', tabletop);
   $('traceBar').classList.toggle('hidden', tabletop);
@@ -446,9 +455,12 @@ async function finishSingleDevice() {
       body: {
         boardId: S.boardId,
         players: S.submissions,
-        // Solo banks for the signed-in profile. In a shared-device game there
-        // is no way to know which player is the profile, so nothing is banked.
-        profileId: S.mode === 'solo' && S.player ? S.player.id : undefined
+        // Solo and the daily bank for the signed-in profile. In a shared-device
+        // game there is no way to know which player is the profile, so nothing
+        // is banked.
+        profileId: (S.mode === 'solo' || S.mode === 'daily') && S.player
+          ? S.player.id
+          : undefined
       }
     });
     showResults(results);
@@ -456,6 +468,271 @@ async function finishSingleDevice() {
     alert(e.message);
     screen('setup');
   }
+}
+
+// ------------------------------------------------------------------- daily
+
+// One board a day, the same sixteen letters for everyone in the house,
+// generated from the date. The point of it is the comparison, so everything
+// here is about where you stand rather than what you scored.
+const D = { ticker: null };
+
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+                'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const WEEKDAYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY',
+                  'THURSDAY', 'FRIDAY', 'SATURDAY'];
+
+// '2026-09-13' as a local date. new Date('2026-09-13') parses as UTC and can
+// land on the 12th west of Greenwich, which would put the wrong number on the
+// card for half the world.
+function localDate(day) {
+  const [y, m, d] = String(day || '').split('-').map(Number);
+  return (y && m && d) ? new Date(y, m - 1, d) : new Date();
+}
+
+function ordinal(n) {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
+}
+
+async function loadDaily() {
+  const q = S.player ? `?playerId=${S.player.id}&profile=${S.profile}` : `?profile=${S.profile}`;
+  S.daily = await api('/daily' + q);
+  return S.daily;
+}
+
+// The strip above the modes. Deliberately not one of the mode tiles: the
+// daily expires, and a row that reads the same every day would stop being
+// looked at by the second week.
+function renderDailyCard() {
+  const card = $('dailyCard');
+  const d = S.daily;
+  if (!d) {
+    $('dcSub').textContent = 'One board. Everyone in the house. Four minutes.';
+    $('dcRight').textContent = '';
+    return;
+  }
+
+  const date = localDate(d.day);
+  $('dcDay').textContent = String(date.getDate());
+  $('dcMonth').textContent = MONTHS[date.getMonth()];
+
+  const played = !!d.alreadyPlayed;
+  card.classList.toggle('played', played);
+
+  const standings = d.standings || [];
+  if (played) {
+    const rank = standings.findIndex(r => r.playerId === (S.player && S.player.id)) + 1;
+    $('dcSub').textContent = standings.length > 1
+      ? `You scored ${d.yourResult.score} — ${rank === 1 ? 'top of the house' : `${ordinal(rank)} of ${standings.length}`}.`
+      : `You scored ${d.yourResult.score}. Nobody else has played it yet.`;
+    $('dcRight').textContent = '✓';
+  } else {
+    $('dcSub').textContent = standings.length
+      ? `${standings.length} ${standings.length === 1 ? 'person has' : 'people have'} played it. You haven't.`
+      : 'One board. Everyone in the house. Four minutes.';
+    $('dcRight').textContent = '›';
+  }
+}
+
+async function openDaily() {
+  screen('daily');
+  say($('dailyMsg'), '');
+  $('dailyStandings').innerHTML = '<div class="note">Loading…</div>';
+  try {
+    await loadDaily();
+  } catch (e) {
+    say($('dailyMsg'), e.message, 'err');
+    $('dailyStandings').innerHTML = '';
+    return;
+  }
+  renderDaily();
+  startDailyCountdown();
+}
+
+function renderDaily() {
+  const d = S.daily;
+  if (!d) return;
+
+  const date = localDate(d.day);
+  $('dhDay').textContent = String(date.getDate());
+  $('dhRest').textContent = `${MONTHS[date.getMonth()]} · ${WEEKDAYS[date.getDay()]}`;
+
+  const standings = d.standings || [];
+  const played = !!d.alreadyPlayed;
+
+  // Three numbers, and only the ones that are actually about today. A career
+  // total on this screen would blunt the only thing it is for.
+  const stats = [
+    // The flame is for a streak that exists. Hanging one off a zero
+    // congratulates somebody for nothing.
+    { value: !S.player ? '—'
+      : S.player.streak > 0 ? `\u{1F525} ${S.player.streak}` : '0',
+      label: 'day streak', lit: !!(S.player && S.player.streak > 1) },
+    { value: String(standings.length),
+      label: standings.length === 1 ? 'has played' : 'have played', lit: false },
+    { value: String(d.totalWords || 0), label: 'words on it', lit: false }
+  ];
+  const host = $('dhStats');
+  host.innerHTML = '';
+  for (const st of stats) {
+    const el = document.createElement('div');
+    el.className = 'dh-stat' + (st.lit ? ' lit' : '');
+    el.innerHTML = '<b></b><span></span>';
+    el.querySelector('b').textContent = st.value;
+    el.querySelector('span').textContent = st.label;
+    host.appendChild(el);
+  }
+
+  $('dailyPlayBtn').textContent = played
+    ? 'Play it again'
+    : `Play today's board · ${mmss((d.durationSec || 240) * 1000)}`;
+
+  // Replaying is allowed and banks nothing. Saying so is better than either
+  // locking the board -- which means telling a seven-year-old no -- or letting
+  // someone grind the same sixteen letters until the standings are a lie.
+  const mins = Math.round((d.durationSec || 240) / 60);
+  if (played) {
+    $('dailyReplayNote').textContent =
+      `Your ${d.yourResult.score} is already filed and it is the one that counts. ` +
+      'Play it as many times as you like; nothing more is banked.';
+  } else if (!S.player) {
+    $('dailyReplayNote').textContent =
+      'You are playing as a guest, so your score will not join the standings. ' +
+      'Pick a profile first if you want it to count.';
+  } else {
+    $('dailyReplayNote').textContent = `${mins} minutes, one scoring go. Make it count.`;
+  }
+
+  renderDailyStandings($('dailyStandings'), standings);
+  $('dailyBoardSub').textContent = dictionaryNote(standings);
+}
+
+// Everyone gets the same letters, but not the same word list, and pretending
+// otherwise would make the standings quietly dishonest.
+function dictionaryNote(standings) {
+  if (!standings.length) return 'Nobody has played it yet. Be the first name on it.';
+  const lists = new Set(standings.map(r => r.profile));
+  if (lists.size > 1) {
+    return 'Same sixteen letters for everyone. The unfiltered list is the wider one, ' +
+      'so those scores had more to find — the tags say who played which.';
+  }
+  return `${standings.length} ${standings.length === 1 ? 'go' : 'goes'} at the same sixteen letters.`;
+}
+
+function renderDailyStandings(host, standings, { mineId = null } = {}) {
+  host.innerHTML = '';
+  if (!standings.length) {
+    host.innerHTML = '<div class="note">No scores yet today.</div>';
+    return;
+  }
+  const me = mineId || (S.player ? S.player.id : null);
+  standings.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'd-row' + (i === 0 ? ' first' : '') + (r.playerId === me ? ' mine' : '');
+    row.innerHTML =
+      '<span class="r"></span><span class="av"></span><span class="nm"></span>' +
+      '<span class="tag"></span><span class="s"></span>';
+    row.querySelector('.r').textContent = String(i + 1);
+    row.querySelector('.av').textContent = r.avatar;
+    row.querySelector('.nm').textContent = r.name;
+    row.querySelector('.tag').textContent = r.profile === 'adult' ? 'unfiltered' : 'kids';
+    row.querySelector('.s').textContent = String(r.score);
+    host.appendChild(row);
+  });
+}
+
+// Counts down to local midnight, when the board turns over. A date with no
+// deadline attached is just a date.
+function startDailyCountdown() {
+  stopDailyCountdown();
+  const paint = () => {
+    const el = $('dhCountdown');
+    if (!el || !S.daily || !S.daily.resetsAt) return;
+    const left = new Date(S.daily.resetsAt).getTime() - Date.now();
+    if (left <= 0) {
+      el.textContent = 'A new board is waiting — reload';
+      return stopDailyCountdown();
+    }
+    const h = Math.floor(left / 3600000);
+    const m = Math.floor((left % 3600000) / 60000);
+    el.textContent = h > 0
+      ? `New board in ${h}h ${m}m`
+      : `New board in ${m} ${m === 1 ? 'minute' : 'minutes'}`;
+  };
+  paint();
+  D.ticker = setInterval(paint, 30000);
+}
+
+function stopDailyCountdown() {
+  clearInterval(D.ticker);
+  D.ticker = null;
+}
+
+// The daily borrows the single-device round wholesale. It does not get to
+// choose the board, the shape, the difficulty or the clock -- that is what
+// makes the standings mean anything.
+async function playDaily() {
+  say($('dailyMsg'), '');
+  try {
+    const d = await loadDaily();
+    S.mode = 'daily';
+    S.boardId = d.boardId;
+    S.board = d.board;
+    S.size = d.size;
+    S.minLength = d.minLength;
+    S.duration = d.durationSec || 240;
+    S.players = [{ id: 'p0', name: S.player ? S.player.name : 'You' }];
+    S.submissions = [];
+    S.turnIndex = 0;
+    stopDailyCountdown();
+    beginTurn();
+  } catch (e) {
+    say($('dailyMsg'), e.message, 'err');
+  }
+}
+
+// Where the round just played left you. Shown on the results screen under the
+// score, because "47 points" means nothing until you know whether it beat Dad.
+function showDailyResult(daily) {
+  const panel = $('dailyResultPanel');
+  if (!daily) { panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+
+  const standings = daily.standings || [];
+  const you = daily.you;
+  const rank = you ? standings.findIndex(r => r.playerId === you.playerId) + 1 : 0;
+
+  if (!S.player) {
+    $('dailyResultHeading').textContent = 'Today’s board';
+    $('dailyResultSub').textContent =
+      'Guests do not join the standings. Pick a profile and tomorrow’s will count.';
+  } else if (!daily.counted) {
+    $('dailyResultHeading').textContent = 'Today’s board';
+    $('dailyResultSub').textContent =
+      `You had already played today, so this one was for fun. Your ${you ? you.score : 0} still stands.`;
+  } else if (rank === 1 && standings.length > 1) {
+    $('dailyResultHeading').textContent = 'Top of the house';
+    $('dailyResultSub').textContent =
+      `You beat ${standings.length - 1} other ${standings.length === 2 ? 'person' : 'people'} on the same sixteen letters.`;
+    Sound.kaching();
+    Fx.banner('TOP OF THE HOUSE', `${you.score} on today’s board`, { tone: 'gold', ms: 2100 });
+    Fx.burst({ count: 130, coins: 18 });
+  } else if (rank) {
+    const above = standings[rank - 2];
+    const gap = above ? above.score - you.score : 0;
+    $('dailyResultHeading').textContent = `${ordinal(rank)} of ${standings.length}`;
+    $('dailyResultSub').textContent = above
+      ? `${above.name} is ${gap} ${gap === 1 ? 'point' : 'points'} ahead.`
+      : 'First name on today’s board.';
+  } else {
+    $('dailyResultHeading').textContent = 'Today’s board';
+    $('dailyResultSub').textContent = '';
+  }
+
+  renderDailyStandings($('dailyResultStandings'), standings,
+    { mineId: you ? you.playerId : null });
 }
 
 // ---------------------------------------------------------------- profiles
@@ -468,17 +745,17 @@ const PROFILE_KEY = 'rambler.playerId';
 async function loadProfiles() {
   try {
     const data = await api('/players');
-    S.players = data.players || [];
+    S.profiles = data.players || [];
     S.avatars = data.avatars || [];
   } catch {
-    S.players = [];
+    S.profiles = [];
     S.avatars = [];
   }
 
   // Re-check the remembered profile against the server: it may have been
   // deleted on another device, and a stale id would silently bank nothing.
   const saved = localStorage.getItem(PROFILE_KEY);
-  S.player = saved ? S.players.find(p => p.id === saved) || null : null;
+  S.player = saved ? S.profiles.find(p => p.id === saved) || null : null;
   if (saved && !S.player) localStorage.removeItem(PROFILE_KEY);
   renderProfileChip();
 }
@@ -489,6 +766,7 @@ function setProfile(player) {
   else localStorage.removeItem(PROFILE_KEY);
   renderProfileChip();
   renderMaraFound();
+  refreshDailyCard();
 }
 
 function profileMeta(p) {
@@ -512,7 +790,7 @@ async function showProfilePicker() {
   const host = $('whoGrid');
   host.innerHTML = '';
 
-  for (const p of S.players) {
+  for (const p of S.profiles) {
     const tile = document.createElement('button');
     tile.type = 'button';
     tile.className = 'who-tile' + (S.player && S.player.id === p.id ? ' current' : '');
@@ -530,7 +808,7 @@ async function showProfilePicker() {
     host.appendChild(tile);
   }
 
-  if (S.players.length < 12) {
+  if (S.profiles.length < 12) {
     const add = document.createElement('button');
     add.type = 'button';
     add.className = 'who-tile add';
@@ -588,7 +866,7 @@ async function saveProfile() {
 
 async function removeProfile() {
   if (!editingId) return;
-  const p = S.players.find(x => x.id === editingId);
+  const p = S.profiles.find(x => x.id === editingId);
   if (!confirm(`Delete ${p ? p.name : 'this profile'}? Their streak, coins and milestones go with it.`)) return;
   try {
     await api(`/players/${editingId}`, { method: 'DELETE' });
@@ -1224,6 +1502,8 @@ function showResults(results) {
     : `${results.missedTotal} words went unfound, out of ${results.totalWords} on the board.`;
   chips($('missedChips'), results.missed.map(m => ({ word: m.word, points: m.points, themed: m.themed })));
 
+  showDailyResult(S.mode === 'daily' ? results.daily : null);
+
   if (results.progress) celebrateProgress(results.progress);
   if (results.progress && results.progress.player) {
     S.player = results.progress.player;
@@ -1234,7 +1514,8 @@ function showResults(results) {
   $('saveScoreBtn').classList.toggle('hidden', !canSaveScore());
   $('againBtn').textContent = S.mode === 'room'
     ? (S.room && S.room.youAreHost ? 'New round' : 'Back to lobby')
-    : 'Play again';
+    : S.mode === 'daily' ? 'Back to today\u2019s board'
+      : 'Play again';
 
   screen('results');
 }
@@ -1546,6 +1827,7 @@ async function joinPressed() {
 
 function backToSetup() {
   stopClock();
+  stopDailyCountdown();
   closeStream();
   clearInterval(M.ticker);
   M.ticker = null;
@@ -1559,6 +1841,13 @@ function backToSetup() {
   S.found = [];
   screen('setup');
   renderSetup();
+  refreshDailyCard();
+}
+
+// Fire-and-forget: the card is a nicety, and a failed fetch should never stop
+// somebody getting back to the setup screen.
+function refreshDailyCard() {
+  loadDaily().then(renderDailyCard).catch(() => {});
 }
 
 // -------------------------------------------------------------- score entry
@@ -1642,6 +1931,14 @@ function bind() {
     renderPlayersEditor();
   };
 
+  $('dailyCard').onclick = () => { Sound.arm(); openDaily(); };
+  $('dailyPlayBtn').onclick = playDaily;
+  $('dailyBackBtn').onclick = () => {
+    stopDailyCountdown();
+    screen('setup');
+    renderDailyCard();
+  };
+
   $('startBtn').onclick = startPressed;
   $('joinBtn').onclick = joinPressed;
   $('joinCodeInput').addEventListener('keydown', e => { if (e.key === 'Enter') joinPressed(); });
@@ -1673,6 +1970,12 @@ function bind() {
   $('entryNextBtn').onclick = takeEntry;
 
   $('againBtn').onclick = () => {
+    if (S.mode === 'daily') {
+      S.mode = 'solo';
+      S.results = null;
+      S.found = [];
+      return openDaily();
+    }
     if (S.mode === 'room') {
       if (S.room && S.room.youAreHost) {
         api(`/rooms/${S.creds.code}/next`, { method: 'POST', body: S.creds }).catch(e => alert(e.message));
@@ -1788,10 +2091,11 @@ async function boot() {
   await loadProfiles();
   renderSeasonStrip();
   renderSetup();
+  refreshDailyCard();
 
   // First visit with profiles already on the server and none chosen: ask who
   // is playing rather than silently banking nothing.
-  if (!S.player && S.players.length) showProfilePicker();
+  if (!S.player && S.profiles.length) showProfilePicker();
 }
 
 boot();

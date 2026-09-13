@@ -35,6 +35,18 @@
     </span>
   </div>
 
+  <button class="daily-card" id="dailyCard" type="button">
+    <span class="dc-date">
+      <span class="dc-day" id="dcDay">--</span>
+      <span class="dc-month" id="dcMonth">---</span>
+    </span>
+    <span class="dc-body">
+      <span class="dc-title">Today's Board</span>
+      <span class="dc-sub" id="dcSub">One board. Everyone in the house. Four minutes.</span>
+    </span>
+    <span class="dc-right" id="dcRight"></span>
+  </button>
+
   <div class="field">
     <label>How are you playing?</label>
     <div class="modes" id="modeList">
@@ -136,6 +148,35 @@
 </section>
 
 <!-- ============ LOBBY (room mode) ============ -->
+<section id="dailyScreen" class="screen hidden">
+  <div class="daily-head">
+    <div class="dh-date">
+      <span class="dh-day" id="dhDay">--</span>
+      <span class="dh-rest" id="dhRest">--- ----</span>
+    </div>
+    <h2>Daily Challenge</h2>
+    <p class="dh-blurb">
+      The same sixteen letters for everyone in the house, generated from
+      today's date. One scoring go each — four minutes on the clock.
+    </p>
+    <div class="dh-countdown" id="dhCountdown"></div>
+  </div>
+
+  <div class="dh-stats" id="dhStats"></div>
+
+  <div class="msg" id="dailyMsg"></div>
+  <button id="dailyPlayBtn" class="primary-btn">Play today's board</button>
+  <div class="note" id="dailyReplayNote" style="text-align:center;margin-top:10px"></div>
+
+  <div class="panel" style="margin-top:24px">
+    <h3>Today in this house</h3>
+    <div class="sub" id="dailyBoardSub"></div>
+    <div id="dailyStandings"></div>
+  </div>
+
+  <button id="dailyBackBtn" class="ghost-btn" style="width:100%;margin-top:18px">Back</button>
+</section>
+
 <section id="lobbyScreen" class="screen hidden">
   <div class="code-display">
     <div class="label">Room code</div>
@@ -324,6 +365,12 @@
     <h3>Words nobody found</h3>
     <div class="sub" id="missedSub"></div>
     <div class="chips" id="missedChips"></div>
+  </div>
+
+  <div class="panel hidden" id="dailyResultPanel">
+    <h3 id="dailyResultHeading">Today's board</h3>
+    <div class="sub" id="dailyResultSub"></div>
+    <div id="dailyResultStandings"></div>
   </div>
 
   <div class="panel hidden" id="arcadePanel">

@@ -50,9 +50,23 @@ function seedFrom(text) {
 
 const { rollBoard } = require('./dice');
 
+// Everyone gets four minutes on the daily, whatever they use elsewhere. A
+// fixed clock is what makes the house standings mean anything, and four is
+// chosen over three because a seven-year-old needs longer to see a word than
+// an adult does, not less.
+const DAILY_DURATION = 240;
+
 // The daily is always a 4x4 on the normal ruleset: one fixed shape everyone
 // can compare fairly. Re-rolled deterministically until it is worth playing,
-// so the seed alone reproduces it anywhere.
+// so the date alone reproduces it anywhere.
+//
+// The seed is the date and nothing else. It used to include the dictionary,
+// which quietly meant a kid and an adult in the same house were compared on
+// two different boards -- the one thing the daily exists not to do. The
+// dictionary still decides which words count, so an adult has the wider list;
+// that is a real advantage and the screen says so rather than hiding it.
+// Quality is measured against the kids list, the strictest of the two, so a
+// board that clears the bar for them clears it for everyone.
 function dailyBoard(day = today(), profile = 'kids') {
   const spec = { cols: 4, rows: 4 };
   const min = round.resolveMinLength(spec, 'normal');
@@ -61,9 +75,9 @@ function dailyBoard(day = today(), profile = 'kids') {
   let words;
 
   do {
-    const rng = seededRng(seedFrom(`${day}|${profile}|${attempt}`));
+    const rng = seededRng(seedFrom(`${day}|${attempt}`));
     board = rollBoard(spec, rng);
-    words = solve(board, spec, profile, { min });
+    words = solve(board, spec, 'kids', { min });
     attempt++;
   } while (words.size < 35 && attempt < 25);
 
@@ -76,7 +90,8 @@ function dailyBoard(day = today(), profile = 'kids') {
     profile,
     difficulty: 'normal',
     minLength: min,
-    totalWords: words.size
+    durationSec: DAILY_DURATION,
+    totalWords: profile === 'kids' ? words.size : solve(board, spec, profile, { min }).size
   };
 }
 
@@ -142,7 +157,8 @@ function recordRound(playerId, {
   marathonScore = 0,
   marathonLevel = 0,
   daily = false,
-  day = today()
+  day = today(),
+  profile = 'kids'
 } = {}) {
   const player = db.getPlayer(playerId);
   if (!player) return null;
@@ -153,7 +169,7 @@ function recordRound(playerId, {
   let dailyCounted = false;
   if (daily) {
     dailyCounted = db.recordDaily({
-      day, playerId, score, words: wordCount, bestWord: bestWord || longestWord
+      day, playerId, score, words: wordCount, bestWord: bestWord || longestWord, profile
     });
   }
 
@@ -224,7 +240,7 @@ function profile(playerId) {
 }
 
 module.exports = {
-  today, yesterday, seededRng, seedFrom, dailyBoard,
+  today, yesterday, seededRng, seedFrom, dailyBoard, DAILY_DURATION,
   MILESTONES, MILESTONE_BY_CODE, catalogue,
   coinsFor, nextStreak, recordRound, profile
 };

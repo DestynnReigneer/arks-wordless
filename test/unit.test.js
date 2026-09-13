@@ -116,6 +116,13 @@ async function run() {
   ok('a different date gives a different board', d1.board.join('') !== d3.board.join(''));
   ok('the daily board is worth playing', d1.totalWords >= 35, String(d1.totalWords));
 
+  // The date is the whole seed. Put the dictionary in it and the house is no
+  // longer playing the same board, which is the only thing the daily is for.
+  const dAdult = progress.dailyBoard('2026-09-12', 'adult');
+  ok('the dictionary does not change the letters', d1.board.join('') === dAdult.board.join(''));
+  ok('but it does change what is findable', dAdult.totalWords >= d1.totalWords,
+    `${dAdult.totalWords} vs ${d1.totalWords}`);
+
   console.log('\n-- marathon --');
   const session = marathon.create({ profile: 'kids', difficulty: 'normal' });
   const startEnds = session.endsAt;
