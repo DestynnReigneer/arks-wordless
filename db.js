@@ -346,21 +346,35 @@ function insertRamblerScore({ initials, score, mode, boardSize, profile, wordCou
     initials, score, mode, boardSize, profile, wordCount,
     bestWord || '', longestWord || '', durationSec, players || 1
   );
-  const rank = db.prepare(`
-    SELECT COUNT(*) AS c FROM rambler_scores
-    WHERE profile = ? AND board_size = ? AND score > ?
-  `).get(profile, boardSize, score).c + 1;
+  const rank = mode === 'marathon'
+    ? db.prepare(`
+        SELECT COUNT(*) AS c FROM rambler_scores
+        WHERE profile = ? AND mode = 'marathon' AND score > ?
+      `).get(profile, score).c + 1
+    : db.prepare(`
+        SELECT COUNT(*) AS c FROM rambler_scores
+        WHERE profile = ? AND board_size = ? AND mode != 'marathon' AND score > ?
+      `).get(profile, boardSize, score).c + 1;
   return { id: info.lastInsertRowid, score, rank };
 }
 
-function listRamblerLeaderboard({ profile, boardSize, limit }) {
+// Marathon boards grow, so board_size means nothing for that mode -- it is
+// filtered by mode instead, and the two never share a table view.
+function listRamblerLeaderboard({ profile, boardSize, mode, limit }) {
   const cap = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 100);
-  const rows = db.prepare(`
-    SELECT * FROM rambler_scores
-    WHERE profile = ? AND board_size = ?
-    ORDER BY score DESC, word_count DESC, created_at ASC
-    LIMIT ?
-  `).all(profile, boardSize, cap);
+  const rows = mode === 'marathon'
+    ? db.prepare(`
+        SELECT * FROM rambler_scores
+        WHERE profile = ? AND mode = 'marathon'
+        ORDER BY score DESC, word_count DESC, created_at ASC
+        LIMIT ?
+      `).all(profile, cap)
+    : db.prepare(`
+        SELECT * FROM rambler_scores
+        WHERE profile = ? AND board_size = ? AND mode != 'marathon'
+        ORDER BY score DESC, word_count DESC, created_at ASC
+        LIMIT ?
+      `).all(profile, boardSize, cap);
   return rows.map(r => ({
     id: r.id,
     initials: r.initials,
