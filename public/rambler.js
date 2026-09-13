@@ -927,7 +927,8 @@ function showMarathonResults(done) {
     $('maraStats').appendChild(el);
   }
 
-  say($('maraSaveMsg'), '');
+  say($('maraSaveMsg'), done.arcade ? arcadeVerdictText(done.arcade) : '',
+    done.arcade && done.arcade.makesBoard ? 'ok' : '');
   buildLadder(done);
 }
 
@@ -940,7 +941,8 @@ async function buildLadder(done) {
 
   let rows = [];
   try {
-    rows = await api(`/leaderboard?profile=${S.profile}&mode=marathon&limit=8`);
+    const wall = await api('/arcade?board=marathon');
+    rows = wall.entries || [];
   } catch { rows = []; }
 
   // Worst first, because the climb goes upward through them.
@@ -1189,6 +1191,7 @@ function showResults(results) {
     S.player = results.progress.player;
     renderProfileChip();
   }
+  showArcadePanel(results.arcade, scoreTarget() ? scoreTarget().score : 0);
   $('saveScoreBtn').classList.toggle('hidden', !canSaveScore());
   $('againBtn').textContent = S.mode === 'room'
     ? (S.room && S.room.youAreHost ? 'New round' : 'Back to lobby')
@@ -1205,51 +1208,85 @@ function scoreTarget() {
   return S.results.results[0];   // already sorted, so this is the winner
 }
 
+// The button only appears if the round actually earned a slot. On a cabinet
+// you do not get to type your initials for a score that missed.
 function canSaveScore() {
   const target = scoreTarget();
-  return !!target && target.score > 0;
+  if (!target || target.score <= 0) return false;
+  if (S.mode === 'room') return true;                 // rooms score per player
+  return !!(S.results && S.results.arcade && S.results.arcade.makesBoard);
+}
+
+// -------------------------------------------------------------- arcade board
+
+// Ten slots. Empty ones are drawn as empty rather than hidden, because a
+// board with three names on it and seven blanks is an invitation.
+function renderArcadeRows(host, entries, slots, { highlightScore = null } = {}) {
+  host.innerHTML = '';
+  for (let i = 0; i < slots; i++) {
+    const e = entries[i];
+    const row = document.createElement('div');
+    row.className = 'lb-row' + (!e ? ' empty' : '');
+    if (e && highlightScore !== null && e.score === highlightScore) row.classList.add('mine');
+    row.innerHTML = '<span class="r"></span><span class="i"></span><span class="d"></span><span class="s"></span>';
+    row.querySelector('.r').textContent = String(i + 1).padStart(2, '0');
+    row.querySelector('.i').textContent = e ? e.initials : '\u2014\u2014\u2014';
+    row.querySelector('.d').textContent = e
+      ? `${e.wordCount} words${e.bestWord ? ' \u00B7 ' + e.bestWord : ''}`
+      : 'free slot';
+    row.querySelector('.s').textContent = e ? String(e.score) : '';
+    host.appendChild(row);
+  }
+}
+
+function arcadeVerdictText(a) {
+  if (!a) return '';
+  if (a.makesBoard) {
+    // The count is what is left *after* this score takes its slot.
+    const freeAfter = Math.max(0, a.slots - a.filled - 1);
+    if (a.filled >= a.slots) return `Good enough for number ${a.rank}. Somebody is coming off.`;
+    return freeAfter
+      ? `Slot ${a.rank} of ${a.slots} is yours \u2014 ${freeAfter} still free.`
+      : `Slot ${a.rank} of ${a.slots} is yours \u2014 that fills the board.`;
+  }
+  return `Not this time \u2014 ${a.shortBy} more ${a.shortBy === 1 ? 'point' : 'points'} and you were on it.`;
+}
+
+function showArcadePanel(a, score) {
+  const panel = $('arcadePanel');
+  if (!a) { panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+  $('arcadeHeading').textContent = a.makesBoard ? 'You made the board' : 'Arcade board';
+  $('arcadeVerdict').textContent = arcadeVerdictText(a);
+  renderArcadeRows($('arcadeBoardList'), a.entries || [], a.slots || 10, { highlightScore: null });
+  if (a.makesBoard) {
+    Sound.kaching();
+    Fx.banner('HIGH SCORE', `number ${a.rank}`, { tone: 'gold', ms: 2000 });
+    Fx.burst({ count: 140, coins: 22 });
+  }
 }
 
 // -------------------------------------------------------------- leaderboard
 
-const lbState = { profile: 'kids', size: 4 };
+const lbState = { board: '4' };
 
 async function openLeaderboard() {
-  lbState.profile = S.profile;
-  lbState.size = S.size;
+  lbState.board = S.mode === 'marathon' ? 'marathon' : String(S.size);
   $('leaderboardOverlay').classList.remove('hidden');
-  renderLeaderboardControls();
   await loadLeaderboard();
-}
-
-function renderLeaderboardControls() {
-  segment($('lbProfileSeg'), S.config.profiles.map(p => ({ label: p.label, value: p.id })),
-    lbState.profile, v => { lbState.profile = v; renderLeaderboardControls(); loadLeaderboard(); });
-  segment($('lbSizeSeg'), S.config.sizes.map(s => ({ label: s.label, value: s.size })),
-    lbState.size, v => { lbState.size = v; renderLeaderboardControls(); loadLeaderboard(); });
 }
 
 async function loadLeaderboard() {
   const host = $('leaderboardList');
   host.innerHTML = '<div class="note">Loading…</div>';
   try {
-    const rows = await api(`/leaderboard?profile=${lbState.profile}&size=${lbState.size}&limit=25`);
-    if (!rows.length) {
-      host.innerHTML = '<div class="note">Nothing here yet. Go and win something.</div>';
-      return;
-    }
-    host.innerHTML = '';
-    rows.forEach((r, i) => {
-      const row = document.createElement('div');
-      row.className = 'lb-row';
-      row.innerHTML =
-        `<span class="r">${i + 1}</span><span class="i"></span>` +
-        `<span class="d"></span><span class="s">${r.score}</span>`;
-      row.querySelector('.i').textContent = r.initials;
-      row.querySelector('.d').textContent =
-        `${r.wordCount} words${r.bestWord ? ' · ' + r.bestWord : ''} · ${r.mode}`;
-      host.appendChild(row);
-    });
+    const data = await api(`/arcade?board=${lbState.board}`);
+    segment($('lbBoardSeg'), data.boards.map(b => ({ label: b.label, value: b.key })),
+      lbState.board, v => { lbState.board = v; loadLeaderboard(); });
+    $('lbCaption').textContent = data.filled >= data.slots
+      ? `All ${data.slots} slots taken — beat number ${data.slots} to get on.`
+      : `${data.filled} of ${data.slots} slots taken.`;
+    renderArcadeRows(host, data.entries, data.slots);
   } catch (e) {
     host.innerHTML = '<div class="note"></div>';
     host.firstChild.textContent = e.message;
@@ -1423,8 +1460,11 @@ function backToSetup() {
 function openInitials() {
   const target = scoreTarget();
   if (!target) return;
-  $('initialsWho').textContent = `Saving ${target.name}'s ${target.score} points.`;
-  for (const box of document.querySelectorAll('.initial-box')) box.value = '';
+  $('initialsWho').textContent = `${target.score} points \u2014 good enough for the board.`;
+  const boxes = [...document.querySelectorAll('.initial-box')];
+  // Prefill from the active profile, because typing AAA every round gets old.
+  const seed = (S.player ? S.player.name : '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  boxes.forEach((b, i) => { b.value = seed[i] || ''; });
   say($('initialsMsg'), '');
   $('initialsOverlay').classList.remove('hidden');
   document.querySelector('.initial-box').focus();
@@ -1443,9 +1483,18 @@ async function saveInitials() {
 
   try {
     const saved = await api('/leaderboard', { method: 'POST', body });
-    say($('initialsMsg'), `Saved — rank #${saved.rank}.`, 'ok');
+    if (!saved.made) {
+      say($('initialsMsg'), `Somebody beat you to it — ${saved.shortBy} short now.`, 'err');
+      return;
+    }
+    const bumped = (saved.evicted || [])[0];
+    say($('initialsMsg'),
+      bumped ? `Number ${saved.rank}. You knocked ${bumped.initials} off.` : `Number ${saved.rank}.`,
+      'ok');
+    Sound.fanfare();
+    Fx.burst({ count: 120, coins: 18 });
     $('saveScoreBtn').classList.add('hidden');
-    setTimeout(() => $('initialsOverlay').classList.add('hidden'), 900);
+    setTimeout(() => $('initialsOverlay').classList.add('hidden'), 1400);
   } catch (e) {
     say($('initialsMsg'), e.message, 'err');
   }

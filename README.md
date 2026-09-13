@@ -44,6 +44,7 @@ Because of Marathon, boards are rectangular internally. Anything that takes a bo
 - **Streaks** — play on consecutive days and it climbs. Rolls over at *local* midnight, which is why `TZ` matters in the compose file.
 - **Daily challenge** — one board a day, the same for everyone in the house, generated from the date rather than stored. One attempt each, and a standings table. Because it comes from the date, it is reproducible anywhere and survives losing the database entirely.
 - **Milestones** — sixteen of them, from "find your first word" to "play thirty days running". Each pays coins.
+- **The arcade board** — three walls (4x4, 5x5, Marathon), ten slots each. You only get to type your initials by beating the tenth score, and when you do, somebody is knocked off for good. Your profile keeps your personal best either way, so missing the wall costs you nothing but the wall.
 - **Coins and hints** — earned slowly, spent on a hint that reveals a word still sitting on the board. A hinted word buys you time but scores nothing, so coins can't be converted straight into points.
 
 ### What has an interface
@@ -55,6 +56,7 @@ Because of Marathon, boards are rectangular internally. Anything that takes a bo
 | Profiles, streaks, coins, milestones | done | done |
 | Hints | done | done |
 | Difficulty + longer timers | done | done |
+| Arcade board (10 slots, gated entry) | done | done |
 | Daily challenge | done | **not built** |
 
 The daily challenge is the last one without a screen. `GET /daily` returns the

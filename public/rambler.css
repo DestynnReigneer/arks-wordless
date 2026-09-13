@@ -1125,3 +1125,14 @@ body.in-vice .screen { position: relative; z-index: 1; }
   .profile-chip .pc-info { display: none; }
   .profile-chip { padding: 4px; }
 }
+
+/* Empty slots on the arcade board are drawn, not hidden — a wall with three
+   names and seven blanks is an invitation. */
+.lb-row.empty { opacity: 0.35; }
+.lb-row.empty .i { letter-spacing: 2px; color: var(--dim); }
+.lb-row.mine {
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
+}

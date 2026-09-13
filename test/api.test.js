@@ -79,6 +79,88 @@ async function run({ base, root }) {
   ok('bad initials are refused', badInitials.status === 400);
   ok('an unknown board is a 404', (await api('/check', 'POST', { boardId: 'deadbeef', word: 'CAT' })).status === 404);
 
+  console.log('\n-- the arcade board --');
+  const arcadeBoard = await api('/arcade?board=4');
+  ok('the board reports its shape', arcadeBoard.data.slots === 10 && arcadeBoard.data.boardKey === '4',
+    JSON.stringify({ slots: arcadeBoard.data.slots, key: arcadeBoard.data.boardKey }));
+  ok('and lists the three boards', arcadeBoard.data.boards.length === 3,
+    JSON.stringify(arcadeBoard.data.boards.map(b => b.key)));
+
+  // Fill every slot, then try to get on with a score that does not deserve it.
+  for (let i = 0; i < 12; i++) {
+    const b = await api('/board', 'POST', { size: 4, profile: 'kids' });
+    const words = solver.solveWords(b.data.board, square(4), 'kids')
+      .filter(w => w.length >= 5).slice(0, 3 + (i % 4));
+    await api('/score', 'POST', { boardId: b.data.boardId, players: [{ id: 'p0', name: 'F', words }] });
+    await api('/leaderboard', 'POST', {
+      boardId: b.data.boardId, playerId: 'p0', mode: 'solo', initials: 'F' + i
+    });
+  }
+  const full = await api('/arcade?board=4');
+  ok('the board never exceeds ten slots', full.data.entries.length <= 10, String(full.data.entries.length));
+  ok('it is sorted best first', full.data.entries.every((e, i, a) => i === 0 || a[i - 1].score >= e.score));
+
+  const boardIsFull = full.data.entries.length === 10 && full.data.entries[9].score > 1;
+
+  // A round worth almost nothing cannot buy a slot on a full board.
+  const cheapBoard = await api('/board', 'POST', { size: 4, profile: 'kids' });
+  const oneWord = solver.solveWords(cheapBoard.data.board, square(4), 'kids').find(w => w.length === 3);
+  await api('/score', 'POST', {
+    boardId: cheapBoard.data.boardId, players: [{ id: 'p0', name: 'Low', words: [oneWord] }]
+  });
+  const rejected = await api('/leaderboard', 'POST', {
+    boardId: cheapBoard.data.boardId, playerId: 'p0', mode: 'solo', initials: 'LOW'
+  });
+  ok('a score that misses the cut is refused entry',
+    !boardIsFull || rejected.data.made === false, JSON.stringify(rejected.data).slice(0, 120));
+  ok('and is told how far short it fell',
+    !boardIsFull || (typeof rejected.data.shortBy === 'number' && rejected.data.shortBy > 0),
+    String(rejected.data.shortBy));
+  ok('missing the board is not an error', rejected.status === 200 || rejected.status === 201,
+    String(rejected.status));
+
+  // A big score gets on and knocks the bottom entry off for good.
+  //
+  // Boards are random, and a weak one can yield fewer points than the current
+  // cutoff -- which made this assertion pass or fail on the luck of the roll.
+  // Roll until the round is genuinely good enough, so the test is about the
+  // board's eviction rule rather than the dice.
+  const beforeTop = (await api('/arcade?board=4')).data.entries;
+  const needed = beforeTop.length === 10 ? beforeTop[9].score : 0;
+  const pointsOf = w => (w.length <= 4 ? 1 : w.length === 5 ? 2 : w.length === 6 ? 3 : w.length === 7 ? 5 : 11);
+
+  let bigBoard = null;
+  let many = [];
+  for (let attempt = 0; attempt < 25; attempt++) {
+    bigBoard = await api('/board', 'POST', { size: 4, profile: 'kids' });
+    many = solver.solveWords(bigBoard.data.board, square(4), 'kids').slice(0, 60);
+    if (many.reduce((a, w) => a + pointsOf(w), 0) > needed) break;
+  }
+  ok('found a round good enough to challenge the board',
+    many.reduce((a, w) => a + pointsOf(w), 0) > needed,
+    `needed more than ${needed}`);
+
+  await api('/score', 'POST', {
+    boardId: bigBoard.data.boardId, players: [{ id: 'p0', name: 'Big', words: many }]
+  });
+  const big = await api('/leaderboard', 'POST', {
+    boardId: bigBoard.data.boardId, playerId: 'p0', mode: 'solo', initials: 'BIG'
+  });
+  ok('a big score makes the board', big.data.made === true, JSON.stringify(big.data).slice(0, 140));
+  ok('and is told which slot it took', big.data.rank >= 1, String(big.data.rank));
+  const afterTop = (await api('/arcade?board=4')).data.entries;
+  ok('the board is still capped after the insert', afterTop.length <= 10, String(afterTop.length));
+  ok('somebody was knocked off to make room',
+    beforeTop.length < 10 || (Array.isArray(big.data.evicted) && big.data.evicted.length >= 1),
+    JSON.stringify(big.data.evicted));
+
+  // Marathon keeps its own wall.
+  const maraWall = await api('/arcade?board=marathon');
+  ok('marathon has a board of its own', maraWall.data.boardKey === 'marathon');
+  ok('and the 4x4 scores did not leak into it',
+    maraWall.data.entries.every(e => e.mode === 'marathon'),
+    JSON.stringify(maraWall.data.entries.map(e => e.mode)));
+
   console.log('\n-- difficulty --');
   const easy = await api('/board', 'POST', { size: 4, difficulty: 'easy' });
   const hard = await api('/board', 'POST', { size: 4, difficulty: 'hard' });

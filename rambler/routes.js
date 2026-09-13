@@ -41,6 +41,17 @@ function assertProfileAllowed(profile, req) {
   }
 }
 
+// The two dictionaries share a board, so an adult round could put a rude word
+// on a wall the kids read. The score still counts -- only the word is withheld.
+function publicEntry(row) {
+  const clean = row.bestWord && dictionary.isWord(row.bestWord, 'kids');
+  return { ...row, bestWord: clean ? row.bestWord : '', profile: undefined };
+}
+
+function boardLabel(key) {
+  return key === 'marathon' ? 'Marathon' : key === '5' ? '5x5 Big' : '4x4 Classic';
+}
+
 function solverSolve(board, spec, profile, min) {
   return solve(board, spec, profile, { min });
 }
@@ -184,21 +195,43 @@ router.post('/score', scoreLimiter, (req, res, next) => {
       });
     }
 
+    // What the arcade board makes of it, so the client knows whether to offer
+    // the initials prompt or show the player how far off they were.
+    const top = result.results[0];
+    if (top) {
+      result.arcade = db.arcadeStanding(db.boardKeyFor('solo', entry.size), top.score);
+      result.arcade.entries = db.listArcadeBoard(result.arcade.boardKey).map(publicEntry);
+    }
+
     res.json(result);
   } catch (e) {
     next(e);
   }
 });
 
+// ---- the arcade board ------------------------------------------------------
+
+// Ten slots per board, and you only get on by beating the tenth score.
+router.get('/arcade', (req, res) => {
+  const key = db.ARCADE_BOARDS.includes(String(req.query.board)) ? String(req.query.board) : '4';
+  const entries = db.listArcadeBoard(key).map(publicEntry);
+  res.json({
+    boardKey: key,
+    label: boardLabel(key),
+    slots: db.ARCADE_SLOTS,
+    filled: entries.length,
+    entries,
+    boards: db.ARCADE_BOARDS.map(k => ({ key: k, label: boardLabel(k) }))
+  });
+});
+
 // ---- leaderboard -----------------------------------------------------------
 
 router.get('/leaderboard', (req, res) => {
-  res.json(db.listRamblerLeaderboard({
-    profile: profileOf(req.query.profile),
-    boardSize: round.SIZES.includes(Number(req.query.size)) ? Number(req.query.size) : 4,
-    mode: req.query.mode === 'marathon' ? 'marathon' : null,
-    limit: req.query.limit
-  }));
+  const key = req.query.mode === 'marathon'
+    ? 'marathon'
+    : db.boardKeyFor('solo', req.query.size);
+  res.json(db.listArcadeBoard(key, req.query.limit).map(publicEntry));
 });
 
 // The score is never taken from the request body. It is looked up from the
@@ -220,7 +253,7 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
     // scored, exactly like every other mode -- never off the request.
     if (body.marathonId) {
       const done = marathon.finish(body.marathonId);
-      const saved = db.insertRamblerScore({
+      const saved = db.insertArcadeScore({
         initials,
         score: done.finalScore,
         mode: 'marathon',
@@ -232,7 +265,7 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
         durationSec: Math.round(done.survivedMs / 1000),
         players: 1
       });
-      return res.status(201).json(saved);
+      return res.status(saved.made ? 201 : 200).json(saved);
     }
 
     if (body.code) {
@@ -255,7 +288,7 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
     const player = result.results.find(r => r.playerId === playerId);
     if (!player) throw fail('Unknown player for that round.', 400);
 
-    const saved = db.insertRamblerScore({
+    const saved = db.insertArcadeScore({
       initials,
       score: player.score,
       mode,
@@ -267,7 +300,8 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
       durationSec,
       players: result.results.length
     });
-    res.status(201).json(saved);
+    // Missing the board is not an error -- it is the answer to the question.
+    res.status(saved.made ? 201 : 200).json(saved);
   } catch (e) {
     next(e);
   }
@@ -480,6 +514,10 @@ router.post('/marathon/:id/finish', scoreLimiter, (req, res, next) => {
         marathonLevel: result.level
       });
     }
+
+    result.arcade = db.arcadeStanding('marathon', result.finalScore);
+    result.arcade.entries = db.listArcadeBoard('marathon').map(publicEntry);
+
     res.json(result);
   } catch (e) {
     next(e);

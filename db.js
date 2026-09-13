@@ -4,7 +4,14 @@ const { DatabaseSync } = require('node:sqlite');
 
 const DATA_DIR = path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new DatabaseSync(path.join(DATA_DIR, 'wordless.db'));
+
+// Tests get their own database file. Sharing one with the running app made the
+// suite non-idempotent -- a second run inherited a full arcade board from the
+// first and behaved differently, which is exactly the kind of flake that
+// teaches people to ignore red builds.
+const DB_FILE = process.env.RAMBLER_DB
+  || (process.env.NODE_ENV === 'test' ? 'test.db' : 'wordless.db');
+const db = new DatabaseSync(path.join(DATA_DIR, DB_FILE));
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS themes (
@@ -104,6 +111,28 @@ db.exec(`
     fulfilled_at TEXT
   );
 `);
+
+// ---- migrations ----
+// CREATE TABLE IF NOT EXISTS will not add a column to a table that already
+// exists, so anything added after the first release needs doing by hand.
+function ensureColumn(table, column, declaration) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+  if (cols.includes(column)) return false;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
+  return true;
+}
+
+// The arcade board is partitioned by shape of game, not by dictionary: 4x4,
+// 5x5 and Marathon. The two dictionaries differ by about 300 words in 172,000,
+// which is a fraction of a word per board -- not enough to justify splitting
+// the wall in half and leaving both halves empty.
+if (ensureColumn('rambler_scores', 'board_key', "TEXT NOT NULL DEFAULT ''")) {
+  db.prepare(`
+    UPDATE rambler_scores
+    SET board_key = CASE WHEN mode = 'marathon' THEN 'marathon' ELSE CAST(board_size AS TEXT) END
+  `).run();
+}
+db.exec(`CREATE INDEX IF NOT EXISTS idx_arcade_board ON rambler_scores (board_key, score DESC);`);
 
 const FONT_STACKS = {
   sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -391,6 +420,120 @@ function listRamblerLeaderboard({ profile, boardSize, mode, limit }) {
   }));
 }
 
+// ---- Rambler: the arcade board ----
+//
+// A real cabinet keeps ten slots and nothing else. You get to type your
+// initials only by knocking someone off, and when you do, they are gone.
+// That scarcity is the entire point -- an unbounded table that merely
+// displays its top 25 has nothing at stake.
+
+const ARCADE_SLOTS = 10;
+const ARCADE_BOARDS = ['4', '5', 'marathon'];
+
+function boardKeyFor(mode, boardSize) {
+  if (mode === 'marathon') return 'marathon';
+  return String(boardSize) === '5' ? '5' : '4';
+}
+
+function rowToArcade(r) {
+  return {
+    id: r.id,
+    initials: r.initials,
+    score: r.score,
+    mode: r.mode,
+    boardKey: r.board_key,
+    boardSize: r.board_size,
+    profile: r.profile,
+    wordCount: r.word_count,
+    bestWord: r.best_word,
+    longestWord: r.longest_word,
+    durationSec: r.duration_sec,
+    players: r.players,
+    createdAt: r.created_at
+  };
+}
+
+function listArcadeBoard(boardKey, limit = ARCADE_SLOTS) {
+  const cap = Math.min(Math.max(parseInt(limit, 10) || ARCADE_SLOTS, 1), ARCADE_SLOTS);
+  return db.prepare(`
+    SELECT * FROM rambler_scores
+    WHERE board_key = ?
+    ORDER BY score DESC, created_at ASC
+    LIMIT ?
+  `).all(String(boardKey), cap).map(rowToArcade);
+}
+
+// Where a score would place, and whether that is good enough to get on.
+// Ties go to whoever got there first, exactly like a cabinet: you have to
+// beat the tenth score, not match it.
+function arcadeStanding(boardKey, score) {
+  const key = String(boardKey);
+  const filled = db.prepare('SELECT COUNT(*) AS c FROM rambler_scores WHERE board_key = ?').get(key).c;
+  const better = db.prepare(
+    'SELECT COUNT(*) AS c FROM rambler_scores WHERE board_key = ? AND score >= ?'
+  ).get(key, score).c;
+
+  const rank = better + 1;
+  const lowest = db.prepare(`
+    SELECT score FROM rambler_scores WHERE board_key = ?
+    ORDER BY score DESC, created_at ASC LIMIT 1 OFFSET ?
+  `).get(key, ARCADE_SLOTS - 1);
+  const cutoff = lowest ? lowest.score : 0;
+
+  return {
+    boardKey: key,
+    rank,
+    filled,
+    slots: ARCADE_SLOTS,
+    cutoff,
+    makesBoard: score > 0 && (filled < ARCADE_SLOTS || score > cutoff),
+    shortBy: filled < ARCADE_SLOTS ? 0 : Math.max(0, cutoff - score + 1)
+  };
+}
+
+// Inserts, then trims the board back to its ten slots. Returns who fell off,
+// because "you knocked ROB off the board" is the whole feeling.
+function insertArcadeScore(entry) {
+  const boardKey = boardKeyFor(entry.mode, entry.boardSize);
+  const standing = arcadeStanding(boardKey, entry.score);
+  // Report the score either way: the caller asked what happened to *this*
+  // score, and omitting it on a miss makes the answer harder to use.
+  if (!standing.makesBoard) return { made: false, score: entry.score, ...standing };
+
+  const info = db.prepare(`
+    INSERT INTO rambler_scores
+      (initials, score, mode, board_size, board_key, profile, word_count,
+       best_word, longest_word, duration_sec, players)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    entry.initials, entry.score, entry.mode, entry.boardSize, boardKey,
+    entry.profile, entry.wordCount, entry.bestWord || '', entry.longestWord || '',
+    entry.durationSec, entry.players || 1
+  );
+
+  const evicted = db.prepare(`
+    SELECT * FROM rambler_scores WHERE board_key = ?
+    ORDER BY score DESC, created_at ASC LIMIT -1 OFFSET ?
+  `).all(boardKey, ARCADE_SLOTS).map(rowToArcade);
+
+  for (const row of evicted) {
+    db.prepare('DELETE FROM rambler_scores WHERE id = ?').run(row.id);
+  }
+
+  return {
+    made: true,
+    id: info.lastInsertRowid,
+    score: entry.score,
+    boardKey,
+    // The standing taken *before* the insert is already the slot this entry
+    // lands in -- it counted everything scoring at least as much, and ties go
+    // to the incumbent. Re-querying afterwards counts this row itself and
+    // reports one place too low.
+    rank: standing.rank,
+    evicted: evicted.map(e => ({ initials: e.initials, score: e.score }))
+  };
+}
+
 // ---- Rambler: players, streaks, dailies, milestones ----
 
 function rowToPlayer(r) {
@@ -520,6 +663,12 @@ module.exports = {
   fulfillThemeRequest,
   insertRamblerScore,
   listRamblerLeaderboard,
+  ARCADE_SLOTS,
+  ARCADE_BOARDS,
+  boardKeyFor,
+  listArcadeBoard,
+  arcadeStanding,
+  insertArcadeScore,
   listPlayers,
   getPlayer,
   createPlayer,
