@@ -13,7 +13,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev 2>/dev/null || npm install --omit=dev
 
 COPY db.js server.js ./
-COPY shaker ./shaker
+COPY rambler ./rambler
 COPY words ./words
 COPY public ./public
 
