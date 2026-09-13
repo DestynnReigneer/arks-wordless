@@ -1,0 +1,8 @@
+# Keep the repo LF regardless of who checks it out. Without this, editing on
+# Windows and building in a Linux container produces diffs that are pure
+# line-ending noise.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary

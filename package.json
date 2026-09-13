@@ -1,0 +1,17 @@
+{
+  "name": "wordless-arcade",
+  "version": "1.0.0",
+  "description": "A self-hosted arcade of word games: Wordless (themed Wordle-style) and Rambler (dice-and-grid word hunt) on one Node + SQLite container.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/run.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.6.2"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

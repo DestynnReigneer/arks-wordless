@@ -1,0 +1,28 @@
+name: Idea
+description: Something the arcade should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What should it do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why?
+      description: Who is it for — you, the kids, a party? That usually decides the design.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it belong?
+      options:
+        - Rambler
+        - Wordless
+        - A new game
+        - Gamification (streaks, milestones, coins)
+        - Deployment / homelab
+        - Not sure

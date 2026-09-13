@@ -3,18 +3,21 @@
 .env.*
 !.env.example
 
+# Dependencies
+node_modules/
+
+# Runtime state. The SQLite database lives here and is bind-mounted into the
+# container; it is the user's data, not the project's.
+data/
+
+# Logs and build noise
+*.log
+boot.log
+npm-debug.log
+
 # OS / editor cruft
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/
 *.swp
-
-# Docker
-*.log
-
-# Dependencies / build output (uncomment/add as the stack is chosen)
-# node_modules/
-# dist/
-# build/
-# __pycache__/
-# *.pyc

@@ -1,0 +1,100 @@
+# Kids dictionary blocklist — base words, one per line.
+#
+# These are REMOVED from the kids dictionary. ENABLE1 is a Scrabble
+# tournament list and contains essentially every swear word there is, so
+# without this file the kids' game happily accepts them.
+#
+# Inflections are generated automatically at load time: listing "wank"
+# also blocks wanks, wanked, wanking, wanker, wankers. So list the base
+# word only.
+#
+# Deliberately NOT blocked, because their everyday meaning is innocent and
+# rejecting them would teach a kid that a real word is fake — which is the
+# one failure mode worth avoiding here:
+#   bum  crack  crap  damn  dung  fart  git  hell  jerk  nut  nuts  pee  poop
+#   joint  screw  shot  snatch  sod  taint  tit  wee  weed  willy
+# If you want any of those blocked too, just add them below.
+
+# --- profanity ---
+arse
+ass
+bastard
+bitch
+bollock
+bollocks
+bugger
+cock
+cunt
+dick
+fuck
+piss
+prick
+shit
+shite
+slag
+slut
+twat
+wank
+whore
+
+# --- explicit anatomy / sexual ---
+anal
+areola
+bonk
+boner
+clit
+clitoris
+coitus
+copulate
+cum
+dildo
+ejaculate
+erection
+fellatio
+felch
+fornicate
+foreskin
+genital
+genitalia
+hooker
+horny
+jism
+jizz
+labia
+masturbate
+nads
+orgasm
+penis
+porn
+porno
+pube
+pubes
+pubic
+pussy
+rimming
+scrotum
+semen
+sex
+sexual
+sexy
+skank
+smegma
+sperm
+spunk
+testicle
+testis
+tits
+titty
+vagina
+vulva
+whorehouse
+
+# --- drugs / booze ---
+bong
+cocaine
+doobie
+heroin
+meth
+reefer
+spliff
+stoned

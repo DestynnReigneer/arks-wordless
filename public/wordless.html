@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wordless Arcade</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div id="headerTop">
+    <a href="/" id="backToArcade" class="icon-btn" title="Back to the arcade">←</a>
+    <h1><span id="titlePrefix">Word</span><span id="titleSuffix">less</span> <span id="titleEmoji"></span></h1>
+    <button id="leaderboardBtn" class="icon-btn" title="Leaderboard">🏆</button>
+  </div>
+  <div id="subtitle">Guess the word in 6 tries</div>
+
+  <div id="themeBar">
+    <label for="themeSelect">Theme</label>
+    <select id="themeSelect"></select>
+    <button id="suggestThemeBtn" class="small-btn">💡 Suggest a Theme</button>
+  </div>
+</header>
+
+<div id="statusBar">
+  <div id="message"></div>
+  <button id="hintBtn" class="hint-btn">💡 Hint (<span id="hintCount">3</span>)</button>
+</div>
+
+<button id="newGameBtn">New Game</button>
+
+<div id="board"></div>
+<div id="keyboard"></div>
+
+<!-- Initials entry (arcade score submission) -->
+<div id="initialsOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <div id="finalScoreLabel">SCORE</div>
+    <div id="finalScoreValue">0</div>
+    <div id="finalScoreDetail"></div>
+    <div id="initialsHint">Enter your initials</div>
+    <div id="initialsBoxes">
+      <input maxlength="1" class="initial-box" data-idx="0" autocomplete="off" spellcheck="false">
+      <input maxlength="1" class="initial-box" data-idx="1" autocomplete="off" spellcheck="false">
+      <input maxlength="1" class="initial-box" data-idx="2" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="overlay-actions">
+      <button id="skipScoreBtn" class="ghost-btn">Skip</button>
+      <button id="saveScoreBtn">Save Score</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leaderboard -->
+<div id="leaderboardOverlay" class="overlay hidden">
+  <div class="overlay-card wide">
+    <div class="overlay-header">
+      <h2>🏆 Leaderboard</h2>
+      <button id="closeLeaderboardBtn" class="icon-btn">✕</button>
+    </div>
+    <select id="leaderboardThemeFilter"></select>
+    <div id="leaderboardList"></div>
+  </div>
+</div>
+
+<!-- Suggest a theme (kid-facing request, no direct creation power) -->
+<div id="themeRequestOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <div class="overlay-header">
+      <h2>💡 Suggest a Theme</h2>
+      <button id="closeThemeRequestBtn" class="icon-btn">✕</button>
+    </div>
+    <form id="themeRequestForm" class="data-form">
+      <label>What should the next theme be?
+        <input type="text" id="requestTopicInput" maxlength="60" placeholder="e.g. Bluey" required>
+      </label>
+      <label>Anything specific to include? <span class="hint-text">(optional)</span>
+        <input type="text" id="requestNoteInput" maxlength="200" placeholder="e.g. Bingo, Muffin, Chilli...">
+      </label>
+      <label>Your name/initials <span class="hint-text">(optional)</span>
+        <input type="text" id="requestByInput" maxlength="30" placeholder="e.g. Ava">
+      </label>
+      <div id="themeRequestError" class="form-error"></div>
+      <div class="overlay-actions">
+        <button type="submit">Send Suggestion</button>
+      </div>
+    </form>
+    <div id="themeRequestThanks" class="hidden">
+      Thanks! Your theme suggestion was sent. 🎉
+    </div>
+  </div>
+</div>
+
+<div id="hint">Type letters to play · Enter to submit · Backspace to erase</div>
+
+<script src="app.js"></script>
+</body>
+</html>

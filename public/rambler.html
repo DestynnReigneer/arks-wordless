@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rambler</title>
+<link rel="stylesheet" href="rambler.css">
+</head>
+<body>
+
+<header>
+  <a href="/" class="icon-btn" title="Back to the arcade">←</a>
+  <h1>RAM<span class="lit">BLER</span></h1>
+  <button id="leaderboardBtn" class="icon-btn" title="Leaderboard">🏆</button>
+</header>
+
+<!-- ============ SETUP ============ -->
+<section id="setupScreen" class="screen">
+  <div class="field">
+    <label>How are you playing?</label>
+    <div class="modes" id="modeList">
+      <button class="mode" data-mode="solo" aria-pressed="true">
+        <span class="emoji">🙂</span>
+        <span class="body">
+          <span class="name">Solo</span>
+          <span class="desc">Just you and the clock. Beat your own best.</span>
+        </span>
+      </button>
+      <button class="mode" data-mode="turns" aria-pressed="false">
+        <span class="emoji">🤝</span>
+        <span class="body">
+          <span class="name">Pass &amp; Play</span>
+          <span class="desc">One phone, 2–8 players. Same board each turn, hand it on when your time is up.</span>
+        </span>
+      </button>
+      <button class="mode" data-mode="tabletop" aria-pressed="false">
+        <span class="emoji">📝</span>
+        <span class="body">
+          <span class="name">Tabletop</span>
+          <span class="desc">Real Boggle rules. One shared timer, everyone writes on paper, then type the lists in to score. Best with a drink in hand.</span>
+        </span>
+      </button>
+      <button class="mode" data-mode="room" aria-pressed="false">
+        <span class="emoji">📱</span>
+        <span class="body">
+          <span class="name">Own Phones</span>
+          <span class="desc">Everyone plays the same board on their own device. Share a four-letter room code.</span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <div class="field" id="playersField">
+    <label>Players</label>
+    <div class="players-edit" id="playersEdit"></div>
+    <button id="addPlayerBtn" class="ghost-btn" style="margin-top:8px;width:100%">+ Add player</button>
+  </div>
+
+  <div class="field" id="nameField">
+    <label>Your name</label>
+    <input type="text" id="nameInput" maxlength="16" placeholder="Who's playing?" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <label>Board</label>
+    <div class="seg" id="sizeSeg"></div>
+  </div>
+
+  <div class="field">
+    <label>Timer</label>
+    <div class="seg" id="durationSeg"></div>
+  </div>
+
+  <div class="field">
+    <label>Dictionary</label>
+    <div class="seg" id="profileSeg"></div>
+    <div class="note" id="profileNote" style="margin-top:8px"></div>
+  </div>
+
+  <div class="msg" id="setupMsg"></div>
+  <button id="startBtn" class="primary-btn">Shake the dice</button>
+
+  <div class="divider" id="joinDivider">or</div>
+  <div class="field" id="joinField">
+    <label>Join someone's room</label>
+    <div class="type-row" style="max-width:none;margin-top:0">
+      <input type="text" id="joinCodeInput" maxlength="4" placeholder="CODE" autocomplete="off"
+             style="text-transform:uppercase;letter-spacing:6px;font-weight:700;text-align:center">
+      <button id="joinBtn" class="ghost-btn">Join</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LOBBY (room mode) ============ -->
+<section id="lobbyScreen" class="screen hidden">
+  <div class="code-display">
+    <div class="label">Room code</div>
+    <div class="code" id="roomCode">----</div>
+  </div>
+  <div class="code-hint">Everyone opens this page and taps Join, then types that code.</div>
+
+  <div class="field">
+    <label>In the room</label>
+    <div class="roster" id="lobbyRoster"></div>
+  </div>
+
+  <div id="hostControls" class="hidden">
+    <div class="field">
+      <label>Board</label>
+      <div class="seg" id="lobbySizeSeg"></div>
+    </div>
+    <div class="field">
+      <label>Timer</label>
+      <div class="seg" id="lobbyDurationSeg"></div>
+    </div>
+    <button id="lobbyStartBtn" class="primary-btn">Start the round</button>
+  </div>
+  <div id="guestWaiting" class="msg hidden">Waiting for the host to start…</div>
+
+  <button id="leaveRoomBtn" class="ghost-btn" style="width:100%;margin-top:14px">Leave room</button>
+</section>
+
+<!-- ============ PASS-THE-PHONE GATE ============ -->
+<section id="gateScreen" class="screen hidden">
+  <div class="gate">
+    <div class="to">Pass the phone to</div>
+    <div class="name" id="gateName">—</div>
+    <div class="note" id="gateNote">Everyone gets the same board. Don't peek before your turn.</div>
+    <button id="gateBtn" class="primary-btn">I'm ready</button>
+  </div>
+</section>
+
+<!-- ============ PLAY ============ -->
+<section id="playScreen" class="screen hidden">
+  <div class="play-top">
+    <div class="turn-name" id="turnName"></div>
+    <div class="clock" id="clock">3:00</div>
+  </div>
+  <div class="timer-track"><div class="timer-fill" id="timerFill"></div></div>
+
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="trace-bar" id="traceBar"><span class="placeholder">Drag across the dice to spell a word</span></div>
+
+  <div class="type-row" id="typeRow">
+    <input type="text" id="typeInput" placeholder="…or type it" autocomplete="off"
+           autocapitalize="characters" spellcheck="false">
+    <button id="typeBtn" class="ghost-btn">Add</button>
+  </div>
+
+  <div class="found">
+    <div class="head">
+      <span id="foundCount">0 words</span>
+      <span class="pts" id="foundPoints">0 pts</span>
+    </div>
+    <div class="chips" id="foundChips"></div>
+  </div>
+
+  <div id="playRoster" class="found hidden" style="margin-top:20px">
+    <div class="head"><span>Everyone else</span></div>
+    <div class="roster" id="playRosterList" style="margin-bottom:0"></div>
+  </div>
+
+  <div id="tabletopHint" class="panel hidden" style="margin-top:18px">
+    <h3>Everyone plays at once</h3>
+    <div class="sub">Write your words on paper. Nobody touches the phone until the buzzer — then you'll each type your list in.</div>
+  </div>
+
+  <button id="doneBtn" class="ghost-btn" style="width:100%;margin-top:18px">I'm done</button>
+</section>
+
+<!-- ============ TABLETOP WORD ENTRY ============ -->
+<section id="entryScreen" class="screen hidden">
+  <div class="result-head">
+    <div class="t">Type in the words for</div>
+    <div class="v" id="entryName">—</div>
+    <div class="s">One per line, or separated by spaces. Spelling counts.</div>
+  </div>
+  <div class="board-wrap" style="max-width:300px;margin-bottom:16px">
+    <div class="board" id="entryBoard"></div>
+  </div>
+  <textarea id="entryText" autocapitalize="characters" spellcheck="false"
+            placeholder="cat&#10;cater&#10;caterer"></textarea>
+  <div class="msg" id="entryMsg"></div>
+  <button id="entryNextBtn" class="primary-btn">Next player</button>
+</section>
+
+<!-- ============ RESULTS ============ -->
+<section id="resultsScreen" class="screen hidden">
+  <div class="result-head">
+    <div class="t" id="resultTitle">Final score</div>
+    <div class="v" id="resultScore">0</div>
+    <div class="s" id="resultSub"></div>
+  </div>
+
+  <div class="standings" id="standings"></div>
+
+  <div class="panel hidden" id="cancelledPanel">
+    <h3>Cancelled</h3>
+    <div class="sub">More than one of you found these, so they score nothing for anybody. That's the rule that makes obscure words worth hunting.</div>
+    <div class="chips" id="cancelledChips"></div>
+  </div>
+
+  <div class="panel" id="missedPanel">
+    <h3>Words nobody found</h3>
+    <div class="sub" id="missedSub"></div>
+    <div class="chips" id="missedChips"></div>
+  </div>
+
+  <div class="result-actions">
+    <button id="saveScoreBtn" class="ghost-btn">Save score</button>
+    <button id="againBtn" class="primary-btn">Play again</button>
+  </div>
+</section>
+
+<!-- ============ OVERLAYS ============ -->
+<div id="leaderboardOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <h2>🏆 Leaderboard</h2>
+      <button id="closeLeaderboardBtn" class="icon-btn">✕</button>
+    </div>
+    <div class="seg" id="lbProfileSeg" style="margin-bottom:8px"></div>
+    <div class="seg" id="lbSizeSeg" style="margin-bottom:14px"></div>
+    <div id="leaderboardList"></div>
+  </div>
+</div>
+
+<div id="initialsOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <h2>Save your score</h2>
+      <button id="closeInitialsBtn" class="icon-btn">✕</button>
+    </div>
+    <div class="note" id="initialsWho"></div>
+    <div class="initials-boxes">
+      <input maxlength="1" class="initial-box" data-idx="0" autocomplete="off" spellcheck="false">
+      <input maxlength="1" class="initial-box" data-idx="1" autocomplete="off" spellcheck="false">
+      <input maxlength="1" class="initial-box" data-idx="2" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="msg" id="initialsMsg"></div>
+    <button id="confirmInitialsBtn" class="primary-btn">Save</button>
+  </div>
+</div>
+
+<div id="adultOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <h2>Unfiltered dictionary</h2>
+      <button id="closeAdultBtn" class="icon-btn">✕</button>
+    </div>
+    <div class="note">
+      This turns on every word in the list — profanity, crude slang, the lot — and they all score.
+      It's meant for a table of adults, not for the kids' game.
+    </div>
+    <div id="adultPinField" class="field hidden" style="margin-top:16px">
+      <label>PIN</label>
+      <input type="text" id="adultPinInput" inputmode="numeric" autocomplete="off" placeholder="••••">
+    </div>
+    <div class="msg" id="adultMsg"></div>
+    <div class="result-actions">
+      <button id="adultCancelBtn" class="ghost-btn">Not now</button>
+      <button id="adultConfirmBtn" class="primary-btn">I'm an adult</button>
+    </div>
+  </div>
+</div>
+
+<script src="rambler.js"></script>
+</body>
+</html>

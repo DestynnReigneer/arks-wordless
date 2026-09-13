@@ -1,0 +1,50 @@
+name: Bug report
+description: Something is broken
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Which game?
+      options:
+        - Rambler
+        - Wordless
+        - The arcade hub
+        - Admin panel
+        - Deployment / Docker
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Which mode, if it matters?
+      options:
+        - Not applicable
+        - Solo
+        - Pass & Play
+        - Tabletop
+        - Own Phones (rooms)
+        - Marathon
+        - Daily challenge
+
+  - type: input
+    id: version
+    attributes:
+      label: Image tag or commit
+      placeholder: "ghcr.io/...:latest, or a commit sha"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Container logs
+      description: "`docker compose logs --tail=50` — redact your ADMIN_TOKEN before pasting."
+      render: shell
