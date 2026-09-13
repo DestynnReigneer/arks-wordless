@@ -82,6 +82,32 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_rambler_daily_day ON rambler_daily (day, score DESC);
 
+  -- A theme pack for Rambler. Unlike a Wordless theme (a list one answer is
+  -- drawn from), these words are added to the dictionary so they *score*, and
+  -- are flagged so finding one is an event rather than a quiet five points.
+  CREATE TABLE IF NOT EXISTS rambler_themes (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    blurb TEXT NOT NULL DEFAULT '',
+    emoji TEXT NOT NULL DEFAULT '\u2728',
+    audience TEXT NOT NULL DEFAULT 'all',
+    accent TEXT NOT NULL DEFAULT '',
+    bg TEXT NOT NULL DEFAULT '',
+    words TEXT NOT NULL,
+    builtin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Words the admin added or removed from the browser. Kept in the database
+  -- rather than written back to words/*.txt, because the files live in the
+  -- image and an edit there would vanish on the next docker compose pull.
+  CREATE TABLE IF NOT EXISTS dictionary_edits (
+    word TEXT NOT NULL,
+    list TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (word, list)
+  );
+
   -- A season is a run of the arcade board. When one ends the walls clear, but
   -- everything personal -- streaks, coins, milestones, lifetime bests --
   -- carries straight over. Only the walls reset.
@@ -464,6 +490,102 @@ function listRamblerLeaderboard({ profile, boardSize, mode, limit }) {
     players: r.players,
     createdAt: r.created_at
   }));
+}
+
+// ---- Rambler theme packs ----
+
+function rowToTheme(r) {
+  if (!r) return null;
+  let words = [];
+  try { words = JSON.parse(r.words); } catch { words = []; }
+  return {
+    id: r.id,
+    label: r.label,
+    blurb: r.blurb,
+    emoji: r.emoji,
+    audience: r.audience,
+    accent: r.accent || '',
+    bg: r.bg || '',
+    words,
+    wordCount: words.length,
+    builtin: !!r.builtin,
+    createdAt: r.created_at
+  };
+}
+
+function listRamblerThemes() {
+  return db.prepare('SELECT * FROM rambler_themes ORDER BY created_at ASC').all().map(rowToTheme);
+}
+
+function getRamblerTheme(id) {
+  return rowToTheme(db.prepare('SELECT * FROM rambler_themes WHERE id = ?').get(String(id || '')));
+}
+
+function themeSlug(label) {
+  return String(label).toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 28) || 'theme';
+}
+
+function createRamblerTheme({ label, blurb, emoji, audience, accent, bg, words }) {
+  const base = themeSlug(label);
+  let id = base;
+  let n = 1;
+  while (getRamblerTheme(id)) id = `${base}-${++n}`;
+
+  db.prepare(`
+    INSERT INTO rambler_themes (id, label, blurb, emoji, audience, accent, bg, words)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, label, blurb || '', emoji || '\u2728', audience || 'all',
+    accent || '', bg || '', JSON.stringify(words));
+  return getRamblerTheme(id);
+}
+
+function updateRamblerTheme(id, patch) {
+  const t = getRamblerTheme(id);
+  if (!t) return null;
+  db.prepare(`
+    UPDATE rambler_themes SET label = ?, blurb = ?, emoji = ?, audience = ?,
+      accent = ?, bg = ?, words = ? WHERE id = ?
+  `).run(
+    patch.label === undefined ? t.label : patch.label,
+    patch.blurb === undefined ? t.blurb : patch.blurb,
+    patch.emoji === undefined ? t.emoji : patch.emoji,
+    patch.audience === undefined ? t.audience : patch.audience,
+    patch.accent === undefined ? t.accent : patch.accent,
+    patch.bg === undefined ? t.bg : patch.bg,
+    JSON.stringify(patch.words === undefined ? t.words : patch.words),
+    id
+  );
+  return getRamblerTheme(id);
+}
+
+function deleteRamblerTheme(id) {
+  // Any season pointing at it loses the reference rather than dangling.
+  db.prepare('UPDATE seasons SET theme_id = NULL WHERE theme_id = ?').run(id);
+  return db.prepare('DELETE FROM rambler_themes WHERE id = ?').run(id).changes > 0;
+}
+
+// ---- runtime dictionary edits ----
+
+function listDictionaryEdits(list = null) {
+  const rows = list
+    ? db.prepare('SELECT * FROM dictionary_edits WHERE list = ? ORDER BY word ASC').all(list)
+    : db.prepare('SELECT * FROM dictionary_edits ORDER BY list ASC, word ASC').all();
+  return rows.map(r => ({ word: r.word, list: r.list, createdAt: r.created_at }));
+}
+
+function addDictionaryEdit(word, list) {
+  const w = String(word || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (w.length < 3) return null;
+  db.prepare('INSERT OR IGNORE INTO dictionary_edits (word, list) VALUES (?, ?)').run(w, list);
+  return { word: w, list };
+}
+
+function removeDictionaryEdit(word, list) {
+  const w = String(word || '').toUpperCase().replace(/[^A-Z]/g, '');
+  return db.prepare('DELETE FROM dictionary_edits WHERE word = ? AND list = ?').run(w, list).changes > 0;
 }
 
 // ---- settings ----
@@ -874,6 +996,14 @@ module.exports = {
   listRamblerLeaderboard,
   ARCADE_SLOTS,
   ARCADE_BOARDS,
+  listRamblerThemes,
+  getRamblerTheme,
+  createRamblerTheme,
+  updateRamblerTheme,
+  deleteRamblerTheme,
+  listDictionaryEdits,
+  addDictionaryEdit,
+  removeDictionaryEdit,
   getSetting,
   setSetting,
   allSettings,

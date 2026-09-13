@@ -5,6 +5,7 @@ const db = require('./db');
 const dictionary = require('./rambler/dictionary');
 const ramblerRoutes = require('./rambler/routes');
 const ramblerSeasons = require('./rambler/seasons');
+const ramblerPacks = require('./rambler/packs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -78,6 +79,9 @@ app.get('/healthz', (req, res) => {
   // a container that was off over a month boundary should come back current.
   ramblerSeasons.checkDue();
   const season = ramblerSeasons.status();
+  // Apply admin word edits and the season's theme pack before anyone plays.
+  ramblerPacks.refresh({ force: true });
+  const theme = ramblerPacks.active();
     const themes = db.listThemes().length;
     if (!stats.kids || !themes) throw new Error('not ready');
     res.json({
@@ -201,6 +205,11 @@ app.listen(PORT, () => {
   ramblerSeasons.checkDue();
   const season = ramblerSeasons.status();
 
+  // Apply the admin's word edits and the season's theme pack before anyone
+  // plays, so the first board of the day already knows about them.
+  ramblerPacks.refresh({ force: true });
+  const theme = ramblerPacks.active();
+
   console.log(`Wordless Arcade running at http://localhost:${PORT}`);
   console.log(
     `Rambler dictionary: ${stats.kids.toLocaleString()} kids / ` +
@@ -210,6 +219,9 @@ app.listen(PORT, () => {
     `Arcade season: ${season.season.label} \u2014 ends ${season.endsAt ? season.endsAt.slice(0, 10) : 'when you say so'}` +
     ` (${season.intervalLabel})`
   );
+  if (theme) {
+    console.log(`Theme pack: ${theme.emoji} ${theme.label} \u2014 ${theme.wordCount} words, ${theme.audience}`);
+  }
   if (!ADMIN_TOKEN) {
     console.warn('ADMIN_TOKEN is not set — admin routes (create/delete theme, view requests) are disabled.');
   }

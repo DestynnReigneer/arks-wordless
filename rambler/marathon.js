@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { growBoard, rollBoard, dims, SIDES } = require('./dice');
+const dictionary = require('./dictionary');
 const { solve } = require('./solver');
 const { wordPoints } = require('./scoring');
 const round = require('./round');
@@ -123,10 +124,11 @@ function submit(sessionId, raw) {
   // A word the player was handed by a hint still counts for time, but not for
   // points — otherwise coins convert straight into score.
   const wasHinted = session.revealed.includes(word);
-  const points = wasHinted ? 0 : wordPoints(word, spec(session), session.minLength);
+  const themed = dictionary.isThemeWord(word);
+  const points = wasHinted ? 0 : wordPoints(word, spec(session), session.minLength, { themed });
   const seconds = secondsFor(word);
 
-  session.found.push({ word, points, seconds, path: verdict.path });
+  session.found.push({ word, points, seconds, themed, path: verdict.path });
   session.score += points;
   session.endsAt += seconds * 1000;
 
@@ -139,6 +141,7 @@ function submit(sessionId, raw) {
     reason: null,
     points,
     seconds,
+    themed,
     hinted: wasHinted,
     path: verdict.path,
     grew
@@ -234,7 +237,7 @@ function view(session) {
     endsAt: session.endsAt,
     serverNow: Date.now(),
     over: session.over,
-    found: session.found.map(f => ({ word: f.word, points: f.points, seconds: f.seconds }))
+    found: session.found.map(f => ({ word: f.word, points: f.points, seconds: f.seconds, themed: !!f.themed }))
   };
 }
 

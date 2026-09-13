@@ -16,6 +16,7 @@ const S = {
   profile: 'kids',
   difficulty: 'normal',
   season: null,          // current season + countdown, from /config and /season
+  theme: null,           // the theme pack the season is wearing, if any
   player: null,          // the profile currently playing; null means guest
   players: [],
   avatars: [],
@@ -102,7 +103,7 @@ function chips(host, items) {
   host.innerHTML = '';
   for (const it of items) {
     const c = document.createElement('span');
-    c.className = 'chip';
+    c.className = 'chip' + (it.themed ? ' themed' : '');
     c.textContent = it.word;
     if (it.points) {
       const sup = document.createElement('sup');
@@ -279,9 +280,12 @@ async function submitWord(raw) {
       flashTrace('no', `${word} — ${verdict.reason}`);
       return;
     }
-    S.found.push({ word, points: pointsFor(word, S.size) });
+    const themed = !!verdict.themed;
+    const points = pointsFor(word, S.size) * (themed ? 2 : 1);
+    S.found.push({ word, points, themed });
     Sound.word(word.length);
     flashTrace('ok', word);
+    if (themed) celebrateThemeWord(word, points);
     renderFound();
     if (S.mode === 'room') pushRoomWords();
   } catch (e) {
@@ -801,7 +805,7 @@ function renderMaraFound() {
   $('maraFoundCount').textContent = plural(M.found.length, 'word');
   const coins = S.player ? S.player.coins : null;
   $('maraCoins').textContent = coins === null ? '' : `${coins} coins`;
-  chips($('maraChips'), [...M.found].reverse().map(f => ({ word: f.word, points: f.points })));
+  chips($('maraChips'), [...M.found].reverse().map(f => ({ word: f.word, points: f.points, themed: f.themed })));
 }
 
 function marathonTick() {
@@ -849,6 +853,7 @@ async function marathonWord(raw) {
     const grew = r.grew;
     Sound.word(word.length);
     flashTrace('ok', word);
+    if (r.themed) celebrateThemeWord(word, r.points);
 
     // Show where the time came from before the clock changes, so the jump has
     // a visible cause.
@@ -1217,7 +1222,7 @@ function showResults(results) {
   $('missedSub').textContent = results.profile === 'kids'
     ? `${results.missedTotal} everyday words were sitting there. The best was ${results.bestPossible ? results.bestPossible.word : '—'}.`
     : `${results.missedTotal} words went unfound, out of ${results.totalWords} on the board.`;
-  chips($('missedChips'), results.missed.map(m => ({ word: m.word, points: m.points })));
+  chips($('missedChips'), results.missed.map(m => ({ word: m.word, points: m.points, themed: m.themed })));
 
   if (results.progress) celebrateProgress(results.progress);
   if (results.progress && results.progress.player) {
@@ -1251,6 +1256,35 @@ function canSaveScore() {
   return !!(S.results && S.results.arcade && S.results.arcade.makesBoard);
 }
 
+// -------------------------------------------------------------------- theme
+
+// The season's pack, worn by the whole game. Only the accent is swapped --
+// re-skinning everything would fight the Vice and arcade palettes rather than
+// sit inside them.
+function applyTheme(theme) {
+  S.theme = theme || null;
+  const root = document.documentElement;
+  if (theme && theme.accent) root.style.setProperty('--accent', theme.accent);
+  else root.style.removeProperty('--accent');
+
+  const banner = $('themeBanner');
+  if (!banner) return;
+  banner.classList.toggle('hidden', !theme);
+  if (!theme) return;
+  $('tbEmoji').textContent = theme.emoji || '\u2728';
+  $('tbLabel').textContent = theme.label;
+  $('tbBlurb').textContent = theme.blurb
+    || `${theme.wordCount} bonus words hiding on the boards \u2014 worth double.`;
+}
+
+// Finding a theme word is meant to be an event, not a quiet five points.
+function celebrateThemeWord(word, points) {
+  Sound.fanfare();
+  Fx.banner(`${S.theme && S.theme.emoji ? S.theme.emoji + ' ' : ''}${word}`,
+    `${S.theme ? S.theme.label : 'Theme'} word \u00B7 double points`, { tone: 'gold', ms: 2000 });
+  Fx.burst({ count: 120, coins: Math.max(10, points * 2) });
+}
+
 // ------------------------------------------------------------------- season
 
 function boardName(key) {
@@ -1280,6 +1314,10 @@ function renderSeasonStrip() {
 async function refreshSeason() {
   try {
     S.season = await api('/season' + (S.player ? `?playerId=${S.player.id}` : ''));
+    // A rollover can change the pack, so re-read it rather than trusting the
+    // config fetched when the page first loaded.
+    const cfg = await api('/config');
+    applyTheme(cfg.theme || null);
   } catch { /* the countdown is not worth an error */ }
   renderSeasonStrip();
 }
@@ -1746,6 +1784,7 @@ async function boot() {
   S.players = defaultPlayers(2);
   bind();
   S.season = S.config.season || null;
+  applyTheme(S.config.theme || null);
   await loadProfiles();
   renderSeasonStrip();
   renderSetup();

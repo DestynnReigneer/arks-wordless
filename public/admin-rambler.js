@@ -164,6 +164,160 @@
     }
   }
 
+  // ---- theme packs ----------------------------------------------------------
+
+  async function loadPacks() {
+    try {
+      const data = await api('/themes');
+      const host = $('packList');
+      host.innerHTML = '';
+
+      const none = document.createElement('div');
+      none.className = 'row';
+      none.innerHTML =
+        `<div class="grow"><b>No theme</b><div class="muted">Plain dictionary, no bonus words</div></div>
+         <button></button>`;
+      const noneBtn = none.querySelector('button');
+      noneBtn.textContent = data.activeId ? 'Use this' : 'In use';
+      noneBtn.disabled = !data.activeId;
+      noneBtn.onclick = () => setSeasonTheme(null);
+      host.appendChild(none);
+
+      if (!data.themes.length) {
+        const empty = document.createElement('div');
+        empty.className = 'muted';
+        empty.style.cssText = 'font-size:12.5px;opacity:.6;margin-top:8px';
+        empty.textContent = 'No packs yet. Copy the prompt above into any chatbot and paste the answer back.';
+        host.appendChild(empty);
+        return;
+      }
+
+      for (const t of data.themes) {
+        const active = t.id === data.activeId;
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML =
+          `<span style="font-size:18px"></span>
+           <div class="grow"><b></b><div class="muted"></div></div>
+           <button data-act="use"></button>
+           <button class="danger" data-act="del">Delete</button>`;
+        row.children[0].textContent = t.emoji;
+        row.querySelector('b').textContent = t.label + (active ? '  \u2190 in use' : '');
+        row.querySelector('.muted').textContent =
+          `${t.wordCount} words \u00B7 ${t.audience}${t.blurb ? ' \u00B7 ' + t.blurb : ''}`;
+
+        const useBtn = row.querySelector('[data-act="use"]');
+        useBtn.textContent = active ? 'In use' : 'Use this';
+        useBtn.disabled = active;
+        useBtn.onclick = () => setSeasonTheme(t.id);
+
+        row.querySelector('[data-act="del"]').onclick = async () => {
+          if (!confirm(`Delete the ${t.label} pack?`)) return;
+          try {
+            await api(`/themes/${t.id}`, { method: 'DELETE' });
+            say($('packMsg'), 'Pack deleted.');
+            loadPacks();
+          } catch (e) { say($('packMsg'), e.message, false); }
+        };
+        host.appendChild(row);
+      }
+    } catch (e) {
+      $('packList').textContent = e.message;
+    }
+  }
+
+  async function setSeasonTheme(themeId) {
+    try {
+      const r = await api('/seasons/theme', { method: 'POST', body: { themeId } });
+      say($('packMsg'), themeId ? `The season is wearing ${r.theme.label}.` : 'Theme removed.');
+      loadPacks();
+      loadSeason();
+    } catch (e) { say($('packMsg'), e.message, false); }
+  }
+
+  async function copyPrompt() {
+    const topic = $('packTopic').value.trim();
+    if (!topic) return say($('packMsg'), 'What should the pack be about?', false);
+    try {
+      const r = await api('/themes/prompt', {
+        method: 'POST', body: { topic, audience: $('packAudience').value }
+      });
+      try {
+        await navigator.clipboard.writeText(r.prompt);
+        say($('packMsg'), 'Prompt copied. Paste it into any chatbot, then paste the answer below.');
+      } catch {
+        // Clipboard is blocked in some contexts; give them the text anyway.
+        $('packJson').value = r.prompt;
+        say($('packMsg'), 'Copy blocked — the prompt is in the box below. Cut it, use it, then paste the answer back.', false);
+      }
+    } catch (e) { say($('packMsg'), e.message, false); }
+  }
+
+  async function ingestPack() {
+    const json = $('packJson').value.trim();
+    if (!json) return say($('packMsg'), 'Paste the JSON the chatbot gave you.', false);
+    try {
+      const r = await api('/themes', { method: 'POST', body: { json } });
+      const reach = r.reach;
+      const verdict = reach.verdict === 'good'
+        ? `Its words turn up on about ${reach.percent}% of boards.`
+        : reach.verdict === 'thin'
+          ? `Careful: its words only turn up on about ${reach.percent}% of boards. More short words would help.`
+          : `These words will almost never appear (about ${reach.percent}% of boards) \u2014 they are too long. Ask for 3-5 letter words.`;
+      say($('packMsg'),
+        `Added ${r.theme.label}: ${r.theme.wordCount} words${r.skipped ? `, ${r.skipped} skipped` : ''}. ${verdict}`,
+        reach.verdict !== 'poor');
+      $('packJson').value = '';
+      $('packTopic').value = '';
+      loadPacks();
+    } catch (e) { say($('packMsg'), e.message, false); }
+  }
+
+  // ---- dictionary -----------------------------------------------------------
+
+  async function loadDictionary() {
+    try {
+      const data = await api('/dictionary');
+      const host = $('dictList2');
+      host.innerHTML = '';
+      if (!data.edits.length) {
+        host.innerHTML = '<div class="muted" style="font-size:12.5px;opacity:.6">No edits. The word files are being used as they ship.</div>';
+        return;
+      }
+      const labels = Object.fromEntries(data.lists.map(l => [l.key, l.label]));
+      for (const e of data.edits) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML =
+          `<div class="grow"><b></b><div class="muted"></div></div>
+           <button class="danger">Undo</button>`;
+        row.querySelector('b').textContent = e.word;
+        row.querySelector('.muted').textContent = labels[e.list] || e.list;
+        row.querySelector('button').onclick = async () => {
+          try {
+            await api('/dictionary', { method: 'DELETE', body: { word: e.word, list: e.list } });
+            say($('dictMsg'), `${e.word} reverted.`);
+            loadDictionary();
+          } catch (err) { say($('dictMsg'), err.message, false); }
+        };
+        host.appendChild(row);
+      }
+    } catch (e) {
+      $('dictList2').textContent = e.message;
+    }
+  }
+
+  async function addWord() {
+    const word = $('dictWord').value.trim();
+    if (!word) return say($('dictMsg'), 'Type a word.', false);
+    try {
+      await api('/dictionary', { method: 'POST', body: { word, list: $('dictList').value } });
+      say($('dictMsg'), `${word.toUpperCase()} added.`);
+      $('dictWord').value = '';
+      loadDictionary();
+    } catch (e) { say($('dictMsg'), e.message, false); }
+  }
+
   // ---- profiles -------------------------------------------------------------
 
   async function loadPlayers() {
@@ -224,6 +378,8 @@
 
   function refreshAll() {
     loadSeason();
+    loadPacks();
+    loadDictionary();
     loadBoards();
     loadPlayers();
   }
@@ -270,6 +426,11 @@
         say($('seasonMsg'), 'Season renamed.');
       } catch (e) { say($('seasonMsg'), e.message, false); }
     };
+
+    $('copyPromptBtn').onclick = copyPrompt;
+    $('ingestPackBtn').onclick = ingestPack;
+    $('addWordBtn').onclick = addWord;
+    $('dictWord').addEventListener('keydown', e => { if (e.key === 'Enter') addWord(); });
 
     $('clearBoardBtn').onclick = async () => {
       if (!confirm(`Clear the ${boardLabel(state.boardKey)} board? Nobody gets a badge for it.`)) return;
