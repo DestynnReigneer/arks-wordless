@@ -522,3 +522,380 @@ textarea:focus { outline: none; border-color: var(--accent); }
   height: 1px;
   background: var(--border);
 }
+
+/* ============================================================================
+   MARATHON — the Vice language from the ARKS colour spec.
+   Scoped to .vice so the classic modes keep the arcade look and Marathon
+   reads as its own place the moment you land on it.
+   ========================================================================== */
+
+.vice {
+  --vice-pink: #ff2ec4;
+  --vice-teal: #00ffc2;
+  --vice-bg: #170a2e;
+  --vice-panel: #22103f;
+  --vice-plate: #0a0416;
+  --vice-text: #f5eaff;
+  --vice-second: #c9a8dd;
+  --vice-caption: #9483ae;
+  --vice-good: #39ff8c;
+  --vice-warn: #ffd23f;
+  --vice-bad: #ff3860;
+  --display: "Orbitron", "Archivo", system-ui, sans-serif;
+  --vbody: "Rajdhani", -apple-system, "Segoe UI", sans-serif;
+  color: var(--vice-text);
+  font-family: var(--vbody);
+}
+
+/* The ground only changes while a Vice screen is actually on screen. */
+body.in-vice {
+  background:
+    radial-gradient(ellipse at 20% -10%, rgba(255, 46, 196, 0.22), transparent 55%),
+    radial-gradient(ellipse at 90% 6%, rgba(0, 255, 194, 0.16), transparent 50%),
+    linear-gradient(160deg, #100620 0%, #170a2e 55%, #2c1350 100%);
+  background-attachment: fixed;
+}
+body.in-vice::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.05;
+  background-image:
+    repeating-linear-gradient(0deg, #00ffc2 0 1px, transparent 1px 42px),
+    repeating-linear-gradient(90deg, #ff2ec4 0 1px, transparent 1px 42px);
+}
+body.in-vice header,
+body.in-vice .screen { position: relative; z-index: 1; }
+
+.vice .cap {
+  font-family: var(--vbody);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vice-caption);
+  display: block;
+}
+
+/* ---- heads-up display ---- */
+.mara-hud {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.mara-level, .mara-score { display: flex; flex-direction: column; gap: 2px; }
+.mara-score { text-align: right; }
+.mara-level b, .mara-score b {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.mara-level b { color: var(--vice-teal); text-shadow: 0 0 14px rgba(0, 255, 194, 0.5); }
+.mara-score b { color: var(--vice-pink); text-shadow: 0 0 14px rgba(255, 46, 196, 0.5); }
+.mara-clock {
+  font-family: var(--display);
+  font-size: 34px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--vice-text);
+  text-shadow: 0 0 20px rgba(255, 46, 196, 0.35);
+  transition: color 0.2s ease, text-shadow 0.2s ease;
+}
+.mara-clock.warn { color: var(--vice-warn); text-shadow: 0 0 22px rgba(255, 210, 63, 0.6); }
+.mara-clock.urgent {
+  color: var(--vice-bad);
+  text-shadow: 0 0 26px rgba(255, 56, 96, 0.75);
+  animation: clockPulse 0.5s ease-in-out infinite;
+}
+@keyframes clockPulse { 50% { transform: scale(1.07); } }
+
+/* The gauge is a fraction of the most time held this run, so a long word
+   visibly refills it instead of nudging a bar that only ever falls. */
+.time-gauge {
+  height: 6px;
+  background: var(--vice-plate);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.time-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--vice-teal), var(--vice-pink));
+  box-shadow: 0 0 14px rgba(255, 46, 196, 0.5);
+  transition: width 0.25s linear;
+}
+.time-fill.gain { animation: gaugeGain 0.45s ease; }
+@keyframes gaugeGain { 50% { filter: brightness(1.9); } }
+.time-fill.urgent { background: var(--vice-bad); box-shadow: 0 0 16px rgba(255, 56, 96, 0.7); }
+
+/* ---- the tension meter: how close the grid is to growing ---- */
+.grow-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.pips { display: flex; gap: 5px; flex: 1; }
+.pips i {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--vice-plate);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.pips i.lit {
+  background: var(--vice-teal);
+  border-color: var(--vice-teal);
+  box-shadow: 0 0 10px rgba(0, 255, 194, 0.6);
+}
+.grow-meter.imminent .cap { color: var(--vice-pink); }
+.grow-meter.imminent .pips i.lit {
+  background: var(--vice-pink);
+  border-color: var(--vice-pink);
+  box-shadow: 0 0 14px rgba(255, 46, 196, 0.8);
+  animation: pipThrob 0.6s ease-in-out infinite;
+}
+@keyframes pipThrob { 50% { transform: scaleY(1.8); } }
+
+/* ---- board ---- */
+.vice .die {
+  background: var(--vice-panel);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--vice-text);
+  font-family: var(--display);
+  font-weight: 700;
+}
+.vice .die.on {
+  background: rgba(0, 255, 194, 0.14);
+  border-color: var(--vice-teal);
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(0, 255, 194, 0.5);
+}
+.vice .die.ok {
+  background: rgba(57, 255, 140, 0.16);
+  border-color: var(--vice-good);
+  box-shadow: 0 0 22px rgba(57, 255, 140, 0.55);
+}
+.vice .die.no { background: rgba(255, 56, 96, 0.14); border-color: var(--vice-bad); }
+/* Tiles that arrived with the new row, so the eye knows where to look. */
+.vice .die.fresh { animation: freshTile 0.7s ease; }
+@keyframes freshTile {
+  0% { transform: scale(0.5); background: var(--vice-pink); border-color: var(--vice-pink); }
+  60% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.board.growing { animation: boardShove 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.2); }
+@keyframes boardShove { 30% { transform: scale(1.04); } }
+
+.vice .trace-bar {
+  background: var(--vice-panel);
+  border-color: rgba(255, 255, 255, 0.1);
+  font-family: var(--display);
+  color: var(--vice-text);
+}
+.vice .trace-bar.ok { color: var(--vice-good); border-color: var(--vice-good); box-shadow: 0 0 20px rgba(57, 255, 140, 0.3); }
+.vice .trace-bar.no { color: var(--vice-bad); border-color: var(--vice-bad); }
+.vice input[type="text"] { background: var(--vice-panel); border-color: rgba(255, 255, 255, 0.12); color: var(--vice-text); }
+.vice input[type="text"]:focus { border-color: var(--vice-teal); }
+.vice .ghost-btn { border-color: rgba(255, 255, 255, 0.14); color: var(--vice-second); }
+.vice .ghost-btn:hover { border-color: var(--vice-teal); color: var(--vice-text); box-shadow: 0 0 16px rgba(0, 255, 194, 0.3); }
+.vice .primary-btn {
+  background: linear-gradient(135deg, var(--vice-pink), #b22089);
+  color: #1c0326;
+  box-shadow: 0 0 24px rgba(255, 46, 196, 0.45);
+}
+.vice .chip { background: var(--vice-panel); border-color: rgba(255, 255, 255, 0.1); color: var(--vice-second); }
+.vice .chip sup { color: var(--vice-teal); }
+.vice .found .head .pts { color: var(--vice-warn); }
+
+.mara-actions { display: flex; gap: 8px; margin-top: 14px; }
+.mara-actions > * { flex: 1; }
+
+/* ---- run over ---- */
+.mara-final { text-align: center; padding: 12px 0 22px; }
+.final-score {
+  font-family: var(--display);
+  font-size: 62px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--vice-pink);
+  text-shadow: 0 0 30px rgba(255, 46, 196, 0.6);
+  font-variant-numeric: tabular-nums;
+  margin: 6px 0 6px;
+}
+.final-sub { font-size: 14px; color: var(--vice-second); }
+
+.mara-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.mstat {
+  background: var(--vice-panel);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 10px;
+  text-align: center;
+}
+.mstat b {
+  display: block;
+  font-family: var(--display);
+  /* An eight-letter word has to fit the same tile as a one-digit level, so
+     the type scales with the tile rather than overflowing it. */
+  font-size: clamp(12px, 4.2vw, 19px);
+  color: var(--vice-teal);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
+
+/* ---- the escalation ladder ---- */
+.ladder-wrap { margin-bottom: 20px; }
+.ladder-cap { margin-bottom: 8px; }
+.ladder { display: flex; flex-direction: column-reverse; gap: 6px; }
+.lrung {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--vice-plate);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 14px;
+  transition: transform 0.18s ease, opacity 0.3s ease;
+}
+.lrung .rn {
+  font-family: var(--display);
+  font-size: 12px;
+  color: var(--vice-caption);
+  font-variant-numeric: tabular-nums;
+}
+.lrung .who { font-weight: 600; letter-spacing: 0.04em; }
+.lrung .sc {
+  font-family: var(--display);
+  font-size: 14px;
+  color: var(--vice-second);
+  font-variant-numeric: tabular-nums;
+}
+/* A rung the climb has smashed through. */
+.lrung.smashed {
+  animation: smash 0.42s ease forwards;
+  border-color: rgba(255, 210, 63, 0.5);
+}
+@keyframes smash {
+  0% { transform: scale(1); }
+  22% { transform: scale(1.05) translateX(-3px); background: rgba(255, 210, 63, 0.22); }
+  40% { transform: scale(0.97) translateX(3px); }
+  100% { transform: scale(1); opacity: 0.34; }
+}
+/* Where the run actually landed. */
+.lrung.landed {
+  background: linear-gradient(90deg, rgba(255, 46, 196, 0.2), rgba(0, 255, 194, 0.1));
+  border-color: var(--vice-pink);
+  box-shadow: 0 0 28px rgba(255, 46, 196, 0.3), inset 0 0 22px rgba(0, 255, 194, 0.08);
+  opacity: 1;
+}
+.lrung.landed .rn { color: var(--vice-pink); font-size: 15px; text-shadow: 0 0 12px rgba(255, 46, 196, 0.7); }
+.lrung.landed .sc { color: var(--vice-teal); text-shadow: 0 0 10px rgba(0, 255, 194, 0.6); }
+.lrung.you .who { color: var(--vice-pink); }
+
+/* ============================================================================
+   Celebration effects
+   ========================================================================== */
+#fxCanvas { position: fixed; inset: 0; pointer-events: none; z-index: 90; }
+
+.fx-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.75);
+  opacity: 0;
+}
+.fx-flash.on { animation: fxFlash 0.42s ease; }
+@keyframes fxFlash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
+
+.fx-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  padding: 20px;
+}
+.fx-banner.on { opacity: 1; }
+.fx-banner-inner { text-align: center; transform: scale(0.7); transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.25, 1.4); }
+.fx-banner.on .fx-banner-inner { transform: scale(1); }
+.fx-title {
+  font-family: "Orbitron", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(30px, 11vw, 74px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+.fx-sub {
+  font-family: "Rajdhani", system-ui, sans-serif;
+  font-weight: 600;
+  font-size: clamp(13px, 4vw, 19px);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  margin-top: 12px;
+  color: #f5eaff;
+}
+.fx-banner.tone-gold .fx-title {
+  color: #ffd23f;
+  text-shadow: 0 0 26px rgba(255, 210, 63, 0.9), 0 0 70px rgba(255, 46, 196, 0.6), 0 4px 0 #7a4e08;
+  animation: bannerStrobe 0.34s steps(2) infinite;
+}
+.fx-banner.tone-pink .fx-title {
+  color: #ff2ec4;
+  text-shadow: 0 0 26px rgba(255, 46, 196, 0.9), 0 0 70px rgba(0, 255, 194, 0.45);
+}
+.fx-banner.tone-teal .fx-title {
+  color: #00ffc2;
+  text-shadow: 0 0 26px rgba(0, 255, 194, 0.85), 0 0 60px rgba(255, 46, 196, 0.35);
+}
+@keyframes bannerStrobe { 50% { filter: brightness(1.45); } }
+
+.fx-fly {
+  position: fixed;
+  z-index: 92;
+  pointer-events: none;
+  font-family: "Orbitron", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  transform: translate(-50%, -50%);
+  transition: transform 0.75s cubic-bezier(0.3, 0.8, 0.3, 1), opacity 0.75s ease;
+}
+.fx-fly.tone-teal { color: #00ffc2; text-shadow: 0 0 16px rgba(0, 255, 194, 0.8); }
+.fx-fly.tone-pink { color: #ff2ec4; text-shadow: 0 0 16px rgba(255, 46, 196, 0.8); }
+.fx-fly.tone-gold { color: #ffd23f; text-shadow: 0 0 16px rgba(255, 210, 63, 0.8); }
+
+.mode-marathon[aria-pressed="true"] {
+  border-color: #ff2ec4;
+  background: linear-gradient(135deg, rgba(255, 46, 196, 0.12), rgba(0, 255, 194, 0.06));
+}
+.mode-marathon[aria-pressed="true"] .name { color: #ff2ec4; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-banner-inner, .fx-flash, .lrung, .time-fill { transition: none !important; }
+  .fx-title, .pips i.lit, .mara-clock.urgent, .board.growing, .vice .die.fresh { animation: none !important; }
+}

@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Rambler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Rajdhani:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="rambler.css">
 </head>
 <body>
@@ -11,6 +14,7 @@
 <header>
   <a href="/" class="icon-btn" title="Back to the arcade">←</a>
   <h1>RAM<span class="lit">BLER</span></h1>
+  <button id="soundBtn" class="icon-btn" title="Sound on/off">🔊</button>
   <button id="leaderboardBtn" class="icon-btn" title="Leaderboard">🏆</button>
 </header>
 
@@ -38,6 +42,13 @@
         <span class="body">
           <span class="name">Tabletop</span>
           <span class="desc">Real Boggle rules. One shared timer, everyone writes on paper, then type the lists in to score. Best with a drink in hand.</span>
+        </span>
+      </button>
+      <button class="mode mode-marathon" data-mode="marathon" aria-pressed="false">
+        <span class="emoji">🔥</span>
+        <span class="body">
+          <span class="name">Marathon</span>
+          <span class="desc">Every word buys you more time, and the grid grows as you go. You don't win — you last.</span>
         </span>
       </button>
       <button class="mode" data-mode="room" aria-pressed="false">
@@ -69,6 +80,12 @@
   <div class="field">
     <label>Timer</label>
     <div class="seg" id="durationSeg"></div>
+  </div>
+
+  <div class="field" id="difficultyField">
+    <label>Difficulty</label>
+    <div class="seg" id="difficultySeg"></div>
+    <div class="note" id="difficultyNote" style="margin-top:8px"></div>
   </div>
 
   <div class="field">
@@ -187,6 +204,76 @@
   <button id="entryNextBtn" class="primary-btn">Next player</button>
 </section>
 
+<!-- ============ MARATHON ============ -->
+<section id="marathonScreen" class="screen hidden vice">
+  <div class="mara-hud">
+    <div class="mara-level">
+      <span class="cap">Level</span>
+      <b id="maraLevel">1</b>
+    </div>
+    <div class="mara-clock" id="maraClock">1:40</div>
+    <div class="mara-score">
+      <span class="cap">Score</span>
+      <b id="maraScore">0</b>
+    </div>
+  </div>
+
+  <div class="time-gauge"><div class="time-fill" id="maraGauge"></div></div>
+
+  <div class="grow-meter" id="maraGrowMeter">
+    <span class="cap">Next row in</span>
+    <div class="pips" id="maraPips"></div>
+  </div>
+
+  <div class="board-wrap">
+    <div class="board" id="maraBoard"></div>
+  </div>
+
+  <div class="trace-bar" id="maraTrace"><span class="placeholder">Drag across the dice</span></div>
+
+  <div class="type-row">
+    <input type="text" id="maraInput" placeholder="…or type it" autocomplete="off"
+           autocapitalize="characters" spellcheck="false">
+    <button id="maraAdd" class="ghost-btn">Add</button>
+  </div>
+
+  <div class="mara-actions">
+    <button id="maraHintBtn" class="ghost-btn">💡 Hint <span id="maraHintCost"></span></button>
+    <button id="maraEndBtn" class="ghost-btn">End run</button>
+  </div>
+
+  <div class="found">
+    <div class="head">
+      <span id="maraFoundCount">0 words</span>
+      <span class="pts" id="maraCoins"></span>
+    </div>
+    <div class="chips" id="maraChips"></div>
+  </div>
+</section>
+
+<!-- ============ MARATHON RESULTS ============ -->
+<section id="maraResultsScreen" class="screen hidden vice">
+  <div class="mara-final">
+    <div class="cap">Run over</div>
+    <div class="final-score" id="maraFinalScore">0</div>
+    <div class="final-sub" id="maraFinalSub"></div>
+  </div>
+
+  <div class="mara-stats" id="maraStats"></div>
+
+  <div class="ladder-wrap">
+    <div class="cap ladder-cap">The climb</div>
+    <div class="ladder" id="maraLadder"></div>
+  </div>
+
+  <div class="msg" id="maraSaveMsg"></div>
+
+  <div class="result-actions">
+    <button id="maraDoneBtn" class="ghost-btn">Done</button>
+    <button id="maraAgainBtn" class="primary-btn">Run again</button>
+  </div>
+</section>
+
 <!-- ============ RESULTS ============ -->
 <section id="resultsScreen" class="screen hidden">
   <div class="result-head">
@@ -267,6 +354,8 @@
   </div>
 </div>
 
+<script src="audio.js"></script>
+<script src="fx.js"></script>
 <script src="rambler.js"></script>
 </body>
 </html>

@@ -196,6 +196,7 @@ router.get('/leaderboard', (req, res) => {
   res.json(db.listRamblerLeaderboard({
     profile: profileOf(req.query.profile),
     boardSize: round.SIZES.includes(Number(req.query.size)) ? Number(req.query.size) : 4,
+    mode: req.query.mode === 'marathon' ? 'marathon' : null,
     limit: req.query.limit
   }));
 });
@@ -214,6 +215,25 @@ router.post('/leaderboard', leaderboardLimiter, (req, res, next) => {
     let playerId;
     let mode;
     let durationSec;
+
+    // A finished Marathon run. The score comes off the session the server
+    // scored, exactly like every other mode -- never off the request.
+    if (body.marathonId) {
+      const done = marathon.finish(body.marathonId);
+      const saved = db.insertRamblerScore({
+        initials,
+        score: done.finalScore,
+        mode: 'marathon',
+        boardSize: 4,
+        profile: done.profile,
+        wordCount: done.wordCount,
+        bestWord: done.best ? done.best.word : '',
+        longestWord: done.longest || '',
+        durationSec: Math.round(done.survivedMs / 1000),
+        players: 1
+      });
+      return res.status(201).json(saved);
+    }
 
     if (body.code) {
       const room = rooms.requireRoom(body.code);
